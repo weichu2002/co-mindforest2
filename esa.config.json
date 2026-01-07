@@ -2,14 +2,7 @@
   "functions": {
     "collab": {
       "handler": "./functions/collab.js",
-      "methods": ["POST", "GET", "OPTIONS"],
-      "bindings": [
-        {
-          "type": "KV",
-          "name": "COLLAB_KV",
-          "kv_name": "mindforest-collab" 
-        }
-      ]
+      "methods": ["POST", "GET", "OPTIONS"]
     }
   },
   "routes": [
