@@ -602,102 +602,194 @@
             }
         }
         
-        // 初始化轮询同步
+                // 初始化轮询同步
         function initPolling(roomId) {
-            updateRoomStatus('online');
-            
-            // 设置轮询间隔
-            syncInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`${ESA_COLLAB_API}?action=get_updates&roomId=${roomId}&userId=${userId}&lastSync=${lastSyncTime}`);
-                    if (response.ok) {
-                        const data = await response.json();
-                        lastSyncTime = Date.now();
-                        
-                        if (data.updates && data.updates.length > 0) {
-                            data.updates.forEach(update => {
-                                applyRemoteOperation(update);
-                            });
-                        }
-                        
-                        if (data.users) {
-                            updateUserList(data.users);
-                        }
-                    }
-                } catch (error) {
-                    console.error('轮询错误:', error);
-                }
-            }, 2000); // 每2秒轮询一次
-            
-            // 更新同步状态显示
-            document.getElementById('sync-status').classList.remove('hidden');
-        }
-        
-        // 广播节点操作
-        function broadcastNodeOperation(operation) {
-            if (!collaborationRoom) return;
-            
-            // 使用HTTP API发送操作
-            sendOperationToAPI(operation);
-        }
-        
-        // 发送操作到API
-        async function sendOperationToAPI(operation) {
+          updateRoomStatus('online');
+          
+          console.log('初始化轮询同步，房间:', roomId);
+          
+          // 设置轮询间隔
+          syncInterval = setInterval(async () => {
             try {
-                await fetch(ESA_COLLAB_API, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        action: 'send_operation',
-                        roomId: collaborationRoom.id,
-                        userId: userId,
-                        operation: operation
-                    })
-                });
+              const response = await fetch(`${ESA_COLLAB_API}?action=get_updates&roomId=${roomId}&userId=${userId}&lastSync=${lastSyncTime}`);
+              
+              if (response.ok) {
+                const data = await response.json();
+                console.log('轮询更新:', data.updates?.length || 0, '个操作');
+                
+                lastSyncTime = Date.now();
+                
+                if (data.updates && data.updates.length > 0) {
+                  data.updates.forEach(update => {
+                    console.log('处理远程操作:', update.type, '来自:', update.userName);
+                    applyRemoteOperation(update);
+                  });
+                }
+                
+                if (data.users) {
+                  updateUserList(data.users);
+                }
+              } else {
+                console.error('轮询失败:', response.status);
+              }
             } catch (error) {
-                console.error('发送操作失败:', error);
+              console.error('轮询错误:', error);
             }
+          }, 2000); // 每2秒轮询一次
+          
+          // 更新同步状态显示
+          document.getElementById('sync-status').classList.remove('hidden');
         }
         
-        // 应用远程操作
-        function applyRemoteOperation(data) {
-            switch (data.type) {
-                case 'add_node':
-                    const node = { 
-                        id: data.node.id, 
-                        parentId: data.node.parentId, 
-                        role: data.node.role, 
-                        content: data.node.content, 
-                        children: [], 
-                        timestamp: data.node.timestamp,
-                        systemPrompt: data.node.systemPrompt || currentSystemPrompt,
-                        region: data.node.region || currentRegion 
-                    };
-                    nodeMap[node.id] = node;
-                    if (node.parentId && nodeMap[node.parentId]) {
-                        nodeMap[node.parentId].children.push(node.id);
-                    } else if (!rootId) {
-                        rootId = node.id;
-                    }
-                    break;
-                    
-                case 'update_node':
-                    if (nodeMap[data.nodeId]) {
-                        nodeMap[data.nodeId].content = data.content;
-                        if (data.systemPrompt !== undefined) {
-                            nodeMap[data.nodeId].systemPrompt = data.systemPrompt;
-                        }
-                    }
-                    break;
-                    
-                case 'set_active_node':
-                    activeNodeId = data.nodeId;
-                    break;
-                    
-                case 'update_system_prompt':
-                    currentSystemPrompt = data.prompt;
-                    break;
+                // 广播节点操作
+        function broadcastNodeOperation(operation) {
+          if (!collaborationRoom) return;
+          
+          const data = {
+            ...operation,
+            userId: userId,
+            userName: userName,
+            timestamp: Date.now(),
+            color: getUserColor(userId)
+          };
+          
+          console.log('广播操作:', operation.type, data);
+          
+          // 发送操作到API
+          sendOperationToAPI(operation);
+        }
+
+                // 发送操作到API
+        async function sendOperationToAPI(operation) {
+          if (!collaborationRoom) return;
+          
+          try {
+            const response = await fetch(ESA_COLLAB_API, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'send_operation',
+                roomId: collaborationRoom.id,
+                userId: userId,
+                operation: operation
+              })
+            });
+            
+            if (!response.ok) {
+              console.error('发送操作失败:', await response.text());
             }
+          } catch (error) {
+            console.error('发送操作失败:', error);
+          }
+        }
+
+                // 应用远程操作
+        function applyRemoteOperation(data) {
+          console.log('应用远程操作:', data.type, data);
+          
+          switch (data.type) {
+            case 'add_node':
+              // 创建节点
+              const node = { 
+                id: data.node.id, 
+                parentId: data.node.parentId, 
+                role: data.node.role, 
+                content: data.node.content, 
+                children: [], 
+                timestamp: data.node.timestamp || Date.now(),
+                systemPrompt: data.node.systemPrompt || currentSystemPrompt,
+                region: data.node.region || currentRegion 
+              };
+              
+              console.log('添加节点:', node.id, '父节点:', node.parentId);
+              
+              // 添加到nodeMap
+              nodeMap[node.id] = node;
+              
+              // 建立父子关系
+              if (node.parentId && nodeMap[node.parentId]) {
+                if (!nodeMap[node.parentId].children) {
+                  nodeMap[node.parentId].children = [];
+                }
+                if (!nodeMap[node.parentId].children.includes(node.id)) {
+                  nodeMap[node.parentId].children.push(node.id);
+                }
+              } else if (!rootId) {
+                // 如果没有根节点，设置当前节点为根节点
+                rootId = node.id;
+                console.log('设置根节点:', rootId);
+              }
+              break;
+              
+            case 'update_node':
+              // 更新节点内容
+              if (nodeMap[data.nodeId]) {
+                console.log('更新节点:', data.nodeId, '新内容:', data.content?.substring(0, 50) + '...');
+                nodeMap[data.nodeId].content = data.content;
+                if (data.systemPrompt !== undefined) {
+                  nodeMap[data.nodeId].systemPrompt = data.systemPrompt;
+                }
+              } else {
+                console.warn('更新节点失败: 节点不存在', data.nodeId);
+              }
+              break;
+              
+            case 'set_active_node':
+              // 设置活动节点
+              console.log('设置活动节点:', data.nodeId);
+              activeNodeId = data.nodeId;
+              break;
+              
+            case 'update_system_prompt':
+              // 更新系统提示词
+              console.log('更新系统提示词:', data.prompt);
+              currentSystemPrompt = data.prompt;
+              break;
+              
+            case 'add_complete_node':
+              // 添加完整节点（包含完整的对话路径）
+              console.log('添加完整节点树');
+              if (data.nodes) {
+                // 批量添加节点
+                data.nodes.forEach(nodeData => {
+                  if (!nodeMap[nodeData.id]) {
+                    nodeMap[nodeData.id] = {
+                      ...nodeData,
+                      children: nodeData.children || []
+                    };
+                  }
+                });
+                
+                // 更新根节点和活动节点
+                if (data.rootId) rootId = data.rootId;
+                if (data.activeNodeId) activeNodeId = data.activeNodeId;
+              }
+              break;
+              
+            default:
+              console.warn('未知操作类型:', data.type);
+          }
+          
+          // 重新渲染
+          console.log('重新渲染... 节点数量:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
+          
+          // 保存当前状态
+          saveCurrentChat();
+          
+          // 重新渲染视图
+          setTimeout(() => {
+            renderStreamView();
+            if (cy) {
+              setTimeout(() => initTree(), 100);
+            }
+          }, 50);
+          
+          // 显示操作通知
+          if (data.userId !== userId && data.userName) {
+            showNotification(`${data.userName} 更新了思维树`, 'info');
+          }
+        }
+      
             
             // 重新渲染
             renderStreamView();
@@ -711,35 +803,70 @@
             }
         }
         
-        // 加载房间快照
+                // 加载房间快照
         function loadRoomSnapshot(snapshot) {
-            if (!snapshot) return;
-            
-            nodeMap = snapshot.nodeMap || {};
-            rootId = snapshot.rootId || null;
-            activeNodeId = snapshot.activeNodeId || null;
-            currentSystemPrompt = snapshot.systemPrompt || DEFAULT_SYSTEM_PROMPT;
-            currentRegion = snapshot.region || 'bj';
-            
-            // 更新UI
+          if (!snapshot) return;
+          
+          console.log('加载房间快照:', snapshot);
+          
+          // 清空当前状态
+          nodeMap = {};
+          rootId = null;
+          activeNodeId = null;
+          
+          // 加载快照数据
+          if (snapshot.nodeMap) {
+            nodeMap = snapshot.nodeMap;
+          }
+          
+          if (snapshot.rootId) {
+            rootId = snapshot.rootId;
+          }
+          
+          if (snapshot.activeNodeId) {
+            activeNodeId = snapshot.activeNodeId;
+          }
+          
+          if (snapshot.systemPrompt) {
+            currentSystemPrompt = snapshot.systemPrompt;
+          }
+          
+          if (snapshot.region) {
+            currentRegion = snapshot.region;
+          }
+          
+          console.log('快照加载完成，节点数:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
+          
+          // 更新UI
+          setTimeout(() => {
             renderStreamView();
             updateRegionDisplay();
-            
-            // 保存到当前对话
-            saveCurrentChat();
+          }, 100);
+          
+          // 保存到当前对话
+          saveCurrentChat();
         }
         
-        // 获取当前快照
+                // 获取当前快照
         function getCurrentSnapshot() {
-            return {
-                nodeMap: nodeMap,
-                rootId: rootId,
-                activeNodeId: activeNodeId,
-                systemPrompt: currentSystemPrompt,
-                region: currentRegion,
-                timestamp: Date.now(),
-                version: 1
-            };
+          const snapshot = {
+            nodeMap: { ...nodeMap }, // 深拷贝节点映射
+            rootId: rootId,
+            activeNodeId: activeNodeId,
+            systemPrompt: currentSystemPrompt,
+            region: currentRegion,
+            timestamp: Date.now(),
+            version: 1
+          };
+          
+          // 清理节点中的循环引用
+          Object.keys(snapshot.nodeMap).forEach(key => {
+            snapshot.nodeMap[key] = { ...snapshot.nodeMap[key] };
+          });
+          
+          console.log('创建快照，节点数:', Object.keys(snapshot.nodeMap).length);
+          
+          return snapshot;
         }
         
         // 更新用户列表
@@ -1044,29 +1171,40 @@
             }
         }
 
-        // ================= 节点管理 =================
+                // ================= 节点管理 =================
         function createNode(role, content, parentId = null, systemPromptSnapshot = null) {
-            const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-            const node = { 
-                id, parentId, role, content, 
-                children: [], 
-                timestamp: Date.now(),
-                systemPrompt: systemPromptSnapshot || currentSystemPrompt,
-                region: currentRegion 
-            };
-            nodeMap[id] = node;
-            if (parentId && nodeMap[parentId]) nodeMap[parentId].children.push(id);
-            else rootId = id;
-            
-            // 广播节点添加操作
-            if (collaborationRoom) {
-                broadcastNodeOperation({
-                    type: 'add_node',
-                    node: node
-                });
+          const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+          const node = { 
+            id, parentId, role, content, 
+            children: [], 
+            timestamp: Date.now(),
+            systemPrompt: systemPromptSnapshot || currentSystemPrompt,
+            region: currentRegion 
+          };
+          nodeMap[id] = node;
+          
+          // 建立父子关系
+          if (parentId && nodeMap[parentId]) {
+            if (!nodeMap[parentId].children) {
+              nodeMap[parentId].children = [];
             }
-            
-            return node;
+            nodeMap[parentId].children.push(id);
+          } else if (!rootId) {
+            // 如果没有根节点，设置当前节点为根节点
+            rootId = id;
+          }
+          
+          // 广播节点添加操作
+          if (collaborationRoom) {
+            broadcastNodeOperation({
+              type: 'add_node',
+              node: node
+            });
+          }
+          
+          console.log('创建节点:', role, id, '父节点:', parentId, '内容长度:', content?.length);
+          
+          return node;
         }
 
         // ================= 视图逻辑 =================
@@ -1221,69 +1359,93 @@
             container.appendChild(loadingDiv);
             container.scrollTop = container.scrollHeight;
 
+                        // 在sendMessage函数中，修改AI调用成功后的部分
             try {
-                const aiNode = createNode('assistant', '', parentId);
-                activeNodeId = aiNode.id;
-
-                // 🔥 直接调用DeepSeek API（前端直接调用，绕过ESA限制）
-                const response = await fetch(DEEPSEEK_API_URL, {
-                    method: "POST",
-                    headers: {
-                        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({ 
-                        model: "deepseek-v3", 
-                        messages: messages,
-                        stream: false, // 使用非流式，避免长时间连接
-                        temperature: 0.7,
-                        max_tokens: 2000
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`API Error: ${response.status} - ${errorText}`);
+              const aiNode = createNode('assistant', '', parentId);
+              activeNodeId = aiNode.id;
+            
+              // 🔥 直接调用DeepSeek API（前端直接调用，绕过ESA限制）
+              const response = await fetch(DEEPSEEK_API_URL, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ 
+                  model: "deepseek-v3", 
+                  messages: messages,
+                  stream: false, // 使用非流式，避免长时间连接
+                  temperature: 0.7,
+                  max_tokens: 2000
+                })
+              });
+            
+              if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error: ${response.status} - ${errorText}`);
+              }
+              
+              const data = await response.json();
+              
+              loadingDiv.remove();
+              
+              // 更新AI节点内容
+              if (data.choices && data.choices[0] && data.choices[0].message) {
+                aiNode.content = data.choices[0].message.content;
+                
+                console.log('AI回复完成，广播更新');
+                
+                // 广播AI节点更新
+                if (collaborationRoom) {
+                  // 先广播节点添加
+                  broadcastNodeOperation({
+                    type: 'add_node',
+                    node: aiNode
+                  });
+                  
+                  // 然后广播节点内容更新
+                  broadcastNodeOperation({
+                    type: 'update_node',
+                    nodeId: aiNode.id,
+                    content: aiNode.content,
+                    systemPrompt: currentSystemPrompt
+                  });
+                  
+                  // 最后广播活动节点变更
+                  broadcastNodeOperation({
+                    type: 'set_active_node',
+                    nodeId: activeNodeId
+                  });
                 }
-                
-                const data = await response.json();
-                
-                loadingDiv.remove();
-                renderStreamView(); 
-                
-                // 更新AI节点内容
-                if (data.choices && data.choices[0] && data.choices[0].message) {
-                    aiNode.content = data.choices[0].message.content;
-                    
-                    // 广播AI节点更新
-                    if (collaborationRoom) {
-                        broadcastNodeOperation({
-                            type: 'update_node',
-                            nodeId: aiNode.id,
-                            content: aiNode.content,
-                            systemPrompt: currentSystemPrompt
-                        });
-                    }
-                } else {
-                    throw new Error('API返回格式错误');
-                }
-                
-                // 重新渲染显示AI回复
-                renderStreamView();
-                saveCurrentChat();
+              } else {
+                throw new Error('API返回格式错误');
+              }
+              
+              // 重新渲染显示AI回复
+              renderStreamView();
+              saveCurrentChat();
+              
             } catch (error) {
-                console.error('发送消息失败:', error);
-                loadingDiv.innerHTML = `<div class="text-red-500 px-4 py-2 bg-red-50 rounded border border-red-200">
-                    <div class="font-semibold">AI请求失败</div>
-                    <div class="text-sm">${error.message}</div>
-                    <div class="text-xs mt-1">请检查API Key或网络连接</div>
-                </div>`;
-                
-                // 创建错误节点
-                const aiNode = createNode('assistant', 'AI服务暂时不可用，请稍后重试。', parentId);
-                activeNodeId = aiNode.id;
-                renderStreamView();
-                saveCurrentChat();
+              console.error('发送消息失败:', error);
+              loadingDiv.innerHTML = `<div class="text-red-500 px-4 py-2 bg-red-50 rounded border border-red-200">
+                <div class="font-semibold">AI请求失败</div>
+                <div class="text-sm">${error.message}</div>
+                <div class="text-xs mt-1">请检查API Key或网络连接</div>
+              </div>`;
+              
+              // 创建错误节点
+              const aiNode = createNode('assistant', 'AI服务暂时不可用，请稍后重试。', parentId);
+              activeNodeId = aiNode.id;
+              
+              if (collaborationRoom) {
+                broadcastNodeOperation({
+                  type: 'add_node',
+                  node: aiNode
+                });
+              }
+              
+              renderStreamView();
+              saveCurrentChat();
             }
         }
 
