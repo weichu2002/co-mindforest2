@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MindForest - ESA边缘协作思维链</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+
+    <style>
+        body, html { height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
+        
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        #cy {
+            width: 100%; height: 100%;
+            background-color: #f8fafc;
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
+            background-size: 20px 20px;
+            position: absolute; top: 0; left: 0;
+            touch-action: none; 
+            z-index: 0; 
+        }
+
+        .prose { font-size: 0.95rem; line-height: 1.7; }
+        .prose p { margin-bottom: 0.8em; }
+        .prose pre { background: #1e293b !important; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1em 0; }
+        .prose code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25rem; color: #ef4444; font-size: 0.9em; font-family: monospace; }
+        .prose pre code { background: transparent; color: inherit; padding: 0; }
+        
+        .prose table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
+        .prose th, .prose td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
+        .prose th { background-color: #f8fafc; font-weight: 600; }
+
+        .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.5em 0; -webkit-overflow-scrolling: touch; }
+        
+        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
+        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
+        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
+        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
+        
+        @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .animate-slide-up { animation: slideUp 0.2s ease-out forwards; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+        
+        .region-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: white;
+            border: 1px solid #1e40af;
+        }
+        
+        .connection-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        
+        .status-online {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: white;
+        }
+        
+        .status-offline {
+            background: linear-gradient(135deg, #6b7280, #4b5563);
+            color: white;
+        }
+        
+        .user-avatar {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .user-color-0 { background-color: #3b82f6; }
+        .user-color-1 { background-color: #10b981; }
+        .user-color-2 { background-color: #f59e0b; }
+        .user-color-3 { background-color: #ef4444; }
+        .user-color-4 { background-color: #8b5cf6; }
+        .user-color-5 { background-color: #ec4899; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 flex" oncontextmenu="return false;"> 
+    <!-- 侧边栏 -->
+    <aside class="w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 z-40 shadow-xl relative" id="sidebar">
+        <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900">
+            <h1 class="font-bold text-xl tracking-wider"><i class="fa-solid fa-tree mr-2 text-green-400"></i>MindForest</h1>
+        </div>
+        
+        <div class="px-4 py-3 bg-slate-800 border-b border-slate-700">
+            <div class="flex justify-between items-center mb-1">
+                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Edge Access Point</span>
+                <span class="flex items-center gap-1 text-[10px] text-green-400">
+                    <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
+                    <span id="latency-display">12ms</span>
+                </span>
+            </div>
+            <select id="edge-region" class="w-full bg-slate-700 text-xs text-white border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer" onchange="simulateRegionSwitch()">
+                <option value="bj">🇨🇳 CN-Beijing (Aliyun)</option>
+                <option value="sg">🇸🇬 AP-Singapore (ESA)</option>
+                <option value="fra">🇩🇪 EU-Frankfurt (ESA)</option>
+                <option value="us">🇺🇸 US-Silicon Valley</option>
+            </select>
+        </div>
+
+        <div class="p-3">
+            <button onclick="createNewChat()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg text-sm font-medium mb-2">
+                <i class="fa-solid fa-plus"></i> 新建思维链
+            </button>
+            <button onclick="showCreateRoomModal()" class="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg text-sm font-medium mb-2">
+                <i class="fa-solid fa-users"></i> 创建协作房间
+            </button>
+            <button onclick="showJoinRoomModal()" class="w-full bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg text-sm font-medium">
+                <i class="fa-solid fa-door-open"></i> 加入协作房间
+            </button>
+        </div>
+
+        <!-- 协作房间状态 -->
+        <div id="collaboration-status" class="hidden p-3 border-t border-slate-700">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold text-slate-300">协作房间</span>
+                <span id="room-status" class="connection-status status-online">在线</span>
+            </div>
+            <div class="mb-2">
+                <div class="text-xs text-slate-400 mb-1">房间ID:</div>
+                <div class="flex items-center gap-2">
+                    <code id="room-id-display" class="text-xs bg-slate-800 px-2 py-1 rounded flex-1 truncate"></code>
+                    <button onclick="copyRoomId()" class="text-slate-400 hover:text-white p-1" title="复制房间ID">
+                        <i class="fa-regular fa-copy text-xs"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="text-xs text-slate-400 mb-1">在线用户 (<span id="user-count">1</span>):</div>
+                <div id="active-users-list" class="space-y-2"></div>
+            </div>
+            <button onclick="leaveRoom()" class="w-full bg-red-600 hover:bg-red-500 text-white py-1.5 px-3 rounded text-xs flex items-center justify-center gap-2 transition-colors">
+                <i class="fa-solid fa-sign-out-alt"></i> 离开房间
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto px-3 py-2 space-y-2" id="history-list"></div>
+
+        <div class="p-4 border-t border-slate-700 text-[10px] text-slate-400 text-center select-none">
+            Accelerated by Aliyun ESA Edge
+        </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="flex-1 flex flex-col relative h-full">
+        <header class="h-14 bg-white border-b flex items-center justify-between px-6 shadow-sm z-30 relative">
+            <div class="flex items-center gap-4">
+                <span id="current-chat-title" class="font-semibold text-gray-700">未命名对话</span>
+                <!-- 协作房间标签 -->
+                <div id="collab-badge" class="hidden flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
+                    <i class="fa-solid fa-users"></i>
+                    <span id="collab-user-count">1</span>人在线
+                </div>
+                <!-- 区域标签 -->
+                <div id="region-badge" class="hidden region-tag">
+                    <i class="fa-solid fa-satellite"></i>
+                    <span id="current-region-label">CN-BJ</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div id="sync-status" class="hidden flex items-center gap-1 text-xs text-gray-500">
+                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <span>实时同步中</span>
+                </div>
+                <button onclick="toggleView()" class="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors font-medium text-sm border border-slate-300">
+                    <i class="fa-solid fa-project-diagram"></i>
+                    <span id="view-toggle-text">切换思维树视图</span>
+                </button>
+            </div>
+        </header>
+
+        <div class="flex-1 relative overflow-hidden">
+            <!-- 对话视图 -->
+            <div id="stream-view" class="absolute inset-0 flex flex-col bg-white z-10 transition-opacity duration-300">
+                <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 pb-48"></div>
+
+                <div class="border-t bg-white p-4 absolute bottom-0 w-full z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+                    <div class="flex flex-wrap gap-2 mb-2 px-1">
+                        <div id="branch-indicator" class="hidden text-xs text-blue-600 font-semibold flex items-center gap-2 bg-blue-50 p-1.5 rounded border border-blue-100 animate-slide-up">
+                            <i class="fa-solid fa-code-branch"></i>
+                            <span>正在基于历史节点创建新分支...</span>
+                            <button onclick="cancelBranching()" class="ml-2 hover:text-blue-800"><i class="fa-solid fa-times"></i></button>
+                        </div>
+                        <div id="file-preview" class="hidden flex items-center gap-2 bg-gray-100 p-1.5 rounded text-xs border border-gray-200 animate-slide-up">
+                            <i class="fa-solid fa-file-word text-blue-600"></i>
+                            <span id="file-name" class="font-mono text-gray-700 truncate max-w-[150px]">doc.docx</span>
+                            <button onclick="clearFile()" class="ml-1 text-gray-500 hover:text-red-500"><i class="fa-solid fa-times"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="relative max-w-5xl mx-auto flex gap-3 items-end">
+                        <div class="flex flex-col gap-2 pb-1">
+                            <button onclick="toggleSystemPromptConfig()" class="p-2 text-gray-500 hover:bg-purple-100 hover:text-purple-600 rounded-full transition-colors relative" title="设置 AI 人设">
+                                <i class="fa-solid fa-masks-theater"></i>
+                            </button>
+                            <button onclick="document.getElementById('file-upload').click()" class="p-2 text-gray-500 hover:bg-blue-100 hover:text-blue-600 rounded-full transition-colors" title="上传 Word 文档">
+                                <i class="fa-solid fa-paperclip"></i>
+                            </button>
+                        </div>
+                        <input type="file" id="file-upload" class="hidden" accept=".docx" onchange="handleFileUpload(this)">
+
+                        <div class="flex-1 relative">
+                            <textarea id="user-input" rows="1" class="w-full pl-4 pr-12 py-3 bg-gray-100 border-0 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white resize-none shadow-sm max-h-32 overflow-y-auto text-sm" placeholder="输入内容... Enter 发送, Shift+Enter 换行" oninput="this.style.height='';this.style.height=Math.min(this.scrollHeight, 128)+'px'"></textarea>
+                            <button onclick="sendMessage()" class="absolute right-2 bottom-2 p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
+                                <i class="fa-solid fa-paper-plane text-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 思维树视图 -->
+            <div id="tree-view" class="absolute inset-0 opacity-0 pointer-events-none transition-opacity duration-300 z-20 bg-slate-50">
+                <div id="cy"></div>
+                
+                <div class="absolute bottom-6 left-6 bg-white/90 backdrop-blur p-4 rounded-lg shadow-xl border border-gray-200 text-sm max-w-xs z-30 select-none pointer-events-none">
+                    <h3 class="font-bold mb-2 text-gray-800 flex items-center gap-2"><i class="fa-solid fa-sitemap text-blue-500"></i> 操作指南</h3>
+                    <ul class="space-y-1 text-gray-600 text-xs pl-1">
+                        <li><i class="fa-solid fa-arrow-pointer w-4"></i> <b>左键点击</b>：跳转到该节点</li>
+                        <li><i class="fa-regular fa-eye w-4"></i> <b>右键点击</b>：查看详细内容</li>
+                        <li><i class="fa-solid fa-up-down-left-right w-4"></i> <b>滚轮/拖拽</b>：平移缩放</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 各种模态框 -->
+    <div id="system-prompt-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-masks-theater text-purple-600"></i> 设置 AI 人设</h3>
+            <textarea id="system-prompt-input" class="w-full h-32 p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 text-sm resize-none" placeholder="在此输入 System Prompt..."></textarea>
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="toggleSystemPromptConfig()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">取消</button>
+                <button onclick="saveSystemPrompt()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="node-detail-modal" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center backdrop-blur-sm" onclick="closeNodeDetail()">
+        <div class="bg-white rounded-xl shadow-2xl w-[800px] max-w-[95%] max-h-[85vh] flex flex-col animate-slide-up" onclick="event.stopPropagation()">
+            <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none">
+                <div class="flex items-center gap-2">
+                    <span id="detail-role-icon"></span>
+                    <h3 class="font-bold text-gray-700">节点详情</h3>
+                </div>
+                <button onclick="closeNodeDetail()" class="text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <div class="p-6 overflow-y-auto prose prose-sm max-w-none" id="node-detail-content"></div>
+            <div class="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
+                <button onclick="copyNodeContent()" class="text-blue-600 text-sm hover:underline"><i class="fa-regular fa-copy"></i> 复制内容</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="create-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-users text-purple-600"></i> 创建协作房间</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">房间名称</label>
+                    <input type="text" id="room-name-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 text-sm" placeholder="例如：量子计算研究讨论" value="协作思维树">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">您的显示名称</label>
+                    <input type="text" id="host-name-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 text-sm" placeholder="输入您在房间中的显示名称" value="主持人">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button onclick="closeCreateRoomModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">取消</button>
+                <button onclick="createCollaborationRoom()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">创建房间</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="join-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-door-open text-green-600"></i> 加入协作房间</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">房间ID或分享链接</label>
+                    <input type="text" id="room-id-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 text-sm" placeholder="输入房间ID或完整链接">
+                    <p class="text-xs text-gray-500 mt-1">房间ID示例: <code class="bg-gray-100 px-1">room_abc123</code></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">您的显示名称</label>
+                    <input type="text" id="user-name-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 text-sm" placeholder="输入您在房间中的显示名称" value="协作者">
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 mt-6">
+                <button onclick="closeJoinRoomModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">取消</button>
+                <button onclick="joinCollaborationRoom()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm">加入房间</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="share-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
+        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
+            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-share-nodes text-blue-600"></i> 分享协作房间</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">房间ID</label>
+                    <div class="flex items-center gap-2">
+                        <code id="share-room-id" class="flex-1 p-3 border rounded-lg bg-gray-50 text-sm font-mono truncate"></code>
+                        <button onclick="copyRoomId()" class="p-3 border rounded-lg hover:bg-gray-50">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-scale-700 mb-1">分享链接</label>
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="share-room-url" readonly class="flex-1 p-3 border rounded-lg bg-gray-50 text-sm truncate">
+                        <button onclick="copyShareUrl()" class="p-3 border rounded-lg hover:bg-gray-50">
+                            <i class="fa-regular fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    <p class="text-sm text-blue-700 flex items-start gap-2">
+                        <i class="fa-solid fa-info-circle mt-0.5"></i>
+                        <span>将此链接发送给其他人，他们即可加入房间参与实时协作。</span>
+                    </p>
+                </div>
+            </div>
+            <div class="flex justify-end mt-6">
+                <button onclick="closeShareRoomModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ================= 配置 =================
+        const DEFAULT_SYSTEM_PROMPT = "你是一个智能助手。回答要专业、清晰，使用Markdown格式。";
+        
+        // AI API配置 - 直接在前端调用
+        const DEEPSEEK_API_KEY = "sk-26d09fa903034902928ae380a56ecfd3"; // 你的API Key
+        const DEEPSEEK_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
+        
+        // ESA协作API端点
+        const ESA_COLLAB_API = '/api/collab'; // 根据esa.config.json配置
+
+        // ================= 状态 =================
+        let nodeMap = {}; 
+        let rootId = null;
+        let activeNodeId = null; 
+        let currentChatId = Date.now().toString();
+        let branchParentId = null; 
+        let chatHistory = JSON.parse(localStorage.getItem('esa_mindforest_history') || '[]');
+        let currentFileContent = null;
+        let currentFileName = null;
+        let currentSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+        let currentRegion = "bj"; 
+        let autoGreetingEnabled = true;
+        
+        // 协作状态
+        let collaborationRoom = null;
+        let userId = generateUserId();
+        let userName = "用户" + Math.floor(Math.random() * 1000);
+        let syncInterval = null;
+        let lastSyncTime = 0;
+
+        // ================= 工具函数 =================
+        function generateUserId() {
+            return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36);
+        }
+        
+        function generateRoomId() {
+            return 'room_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now().toString(36).substr(0, 5);
+        }
+        
+        function getUserColor(userId) {
+            let hash = 0;
+            for (let i = 0; i < userId.length; i++) {
+                hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return Math.abs(hash) % 6;
+        }
+
+        // ================= 初始化 =================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSidebar();
+            
+            // 检查URL是否有房间参数
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomIdFromUrl = urlParams.get('room');
+            
+            if (roomIdFromUrl) {
+                // 从URL加入房间
+                setTimeout(() => {
+                    document.getElementById('room-id-input').value = roomIdFromUrl;
+                    showJoinRoomModal();
+                }, 500);
+            } else if (chatHistory.length > 0) {
+                loadChat(chatHistory[0].id);
+            } else {
+                createNewChat();
+            }
+
+            document.getElementById('user-input').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault(); 
+                    sendMessage();
+                }
+            });
+
+            window.addEventListener('resize', () => { if(cy) cy.resize(); });
+            
+            // 初始化用户名称
+            const savedName = localStorage.getItem('esa_user_name');
+            if (savedName) {
+                userName = savedName;
+            }
+        });
+
+        // ================= 协作功能 =================
+        
+        // 创建协作房间
+        async function createCollaborationRoom() {
+            const roomName = document.getElementById('room-name-input').value || "协作思维树";
+            const hostName = document.getElementById('host-name-input').value.trim() || "主持人";
+            
+            // 生成房间ID
+            const roomId = generateRoomId();
+            
+            // 保存用户名
+            userName = hostName;
+            localStorage.setItem('esa_user_name', userName);
+            
+            // 创建房间数据
+            collaborationRoom = {
+                id: roomId,
+                name: roomName,
+                method: 'polling',
+                createdBy: userId,
+                createdByName: userName,
+                createdAt: new Date().toISOString(),
+                activeUsers: [{
+                    id: userId,
+                    name: userName,
+                    color: getUserColor(userId),
+                    region: currentRegion,
+                    joinedAt: new Date().toISOString(),
+                    isHost: true
+                }]
+            };
+            
+            // 创建当前思维树的快照
+            const snapshot = getCurrentSnapshot();
+            
+            try {
+                // 调用ESA API创建房间
+                const response = await fetch(ESA_COLLAB_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'create_room',
+                        roomId: roomId,
+                        roomData: collaborationRoom,
+                        snapshot: snapshot,
+                        userId: userId,
+                        userName: userName
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // 初始化轮询同步
+                    initPolling(roomId);
+                    
+                    // 更新UI
+                    updateCollaborationUI();
+                    
+                    // 关闭模态框，显示分享模态框
+                    closeCreateRoomModal();
+                    setTimeout(() => {
+                        showShareRoomModal(roomId);
+                    }, 300);
+                    
+                    showNotification(`协作房间 "${roomName}" 创建成功！`, 'success');
+                } else {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+            } catch (error) {
+                console.error('创建房间错误:', error);
+                showNotification('创建房间失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 加入协作房间
+        async function joinCollaborationRoom() {
+            let roomId = document.getElementById('room-id-input').value.trim();
+            const inputUserName = document.getElementById('user-name-input').value.trim() || "协作者";
+            
+            // 从URL中提取房间ID
+            if (roomId.includes('room=')) {
+                const urlParams = new URLSearchParams(roomId.split('?')[1]);
+                roomId = urlParams.get('room');
+            } else if (roomId.includes('/room/')) {
+                roomId = roomId.split('/room/')[1];
+            }
+            
+            // 简单验证
+            if (!roomId || roomId.length < 5) {
+                showNotification('请输入有效的房间ID', 'error');
+                return;
+            }
+            
+            // 保存用户名
+            userName = inputUserName;
+            localStorage.setItem('esa_user_name', userName);
+            
+            try {
+                // 先获取房间信息
+                const infoResponse = await fetch(`${ESA_COLLAB_API}?action=get_room_info&roomId=${roomId}`);
+                if (!infoResponse.ok) {
+                    throw new Error('房间不存在或无法访问');
+                }
+                
+                // 调用ESA API加入房间
+                const response = await fetch(ESA_COLLAB_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'join_room',
+                        roomId: roomId,
+                        userId: userId,
+                        userName: userName,
+                        userData: {
+                            id: userId,
+                            name: userName,
+                            color: getUserColor(userId),
+                            region: currentRegion,
+                            joinedAt: new Date().toISOString(),
+                            isHost: false
+                        }
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    collaborationRoom = data.room;
+                    
+                    // 加载思维树快照
+                    if (data.snapshot) {
+                        loadRoomSnapshot(data.snapshot);
+                    }
+                    
+                    // 初始化轮询同步
+                    initPolling(roomId);
+                    
+                    // 更新UI
+                    updateCollaborationUI();
+                    
+                    // 关闭模态框
+                    closeJoinRoomModal();
+                    
+                    showNotification(`已加入房间 "${collaborationRoom.name}"`, 'success');
+                } else {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+            } catch (error) {
+                console.error('加入房间错误:', error);
+                showNotification('加入房间失败: ' + error.message, 'error');
+            }
+        }
+        
+        // 初始化轮询同步
+        function initPolling(roomId) {
+            updateRoomStatus('online');
+            
+            // 设置轮询间隔
+            syncInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${ESA_COLLAB_API}?action=get_updates&roomId=${roomId}&userId=${userId}&lastSync=${lastSyncTime}`);
+                    if (response.ok) {
+                        const data = await response.json();
+                        lastSyncTime = Date.now();
+                        
+                        if (data.updates && data.updates.length > 0) {
+                            data.updates.forEach(update => {
+                                applyRemoteOperation(update);
+                            });
+                        }
+                        
+                        if (data.users) {
+                            updateUserList(data.users);
+                        }
+                    }
+                } catch (error) {
+                    console.error('轮询错误:', error);
+                }
+            }, 2000); // 每2秒轮询一次
+            
+            // 更新同步状态显示
+            document.getElementById('sync-status').classList.remove('hidden');
+        }
+        
+        // 广播节点操作
+        function broadcastNodeOperation(operation) {
+            if (!collaborationRoom) return;
+            
+            // 使用HTTP API发送操作
+            sendOperationToAPI(operation);
+        }
+        
+        // 发送操作到API
+        async function sendOperationToAPI(operation) {
+            try {
+                await fetch(ESA_COLLAB_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'send_operation',
+                        roomId: collaborationRoom.id,
+                        userId: userId,
+                        operation: operation
+                    })
+                });
+            } catch (error) {
+                console.error('发送操作失败:', error);
+            }
+        }
+        
+        // 应用远程操作
+        function applyRemoteOperation(data) {
+            switch (data.type) {
+                case 'add_node':
+                    const node = { 
+                        id: data.node.id, 
+                        parentId: data.node.parentId, 
+                        role: data.node.role, 
+                        content: data.node.content, 
+                        children: [], 
+                        timestamp: data.node.timestamp,
+                        systemPrompt: data.node.systemPrompt || currentSystemPrompt,
+                        region: data.node.region || currentRegion 
+                    };
+                    nodeMap[node.id] = node;
+                    if (node.parentId && nodeMap[node.parentId]) {
+                        nodeMap[node.parentId].children.push(node.id);
+                    } else if (!rootId) {
+                        rootId = node.id;
+                    }
+                    break;
+                    
+                case 'update_node':
+                    if (nodeMap[data.nodeId]) {
+                        nodeMap[data.nodeId].content = data.content;
+                        if (data.systemPrompt !== undefined) {
+                            nodeMap[data.nodeId].systemPrompt = data.systemPrompt;
+                        }
+                    }
+                    break;
+                    
+                case 'set_active_node':
+                    activeNodeId = data.nodeId;
+                    break;
+                    
+                case 'update_system_prompt':
+                    currentSystemPrompt = data.prompt;
+                    break;
+            }
+            
+            // 重新渲染
+            renderStreamView();
+            if (cy) {
+                setTimeout(() => initTree(), 100);
+            }
+            
+            // 显示操作通知
+            if (data.userId !== userId) {
+                showNotification(`${data.userName} 更新了思维树`, 'info');
+            }
+        }
+        
+        // 加载房间快照
+        function loadRoomSnapshot(snapshot) {
+            if (!snapshot) return;
+            
+            nodeMap = snapshot.nodeMap || {};
+            rootId = snapshot.rootId || null;
+            activeNodeId = snapshot.activeNodeId || null;
+            currentSystemPrompt = snapshot.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+            currentRegion = snapshot.region || 'bj';
+            
+            // 更新UI
+            renderStreamView();
+            updateRegionDisplay();
+            
+            // 保存到当前对话
+            saveCurrentChat();
+        }
+        
+        // 获取当前快照
+        function getCurrentSnapshot() {
+            return {
+                nodeMap: nodeMap,
+                rootId: rootId,
+                activeNodeId: activeNodeId,
+                systemPrompt: currentSystemPrompt,
+                region: currentRegion,
+                timestamp: Date.now(),
+                version: 1
+            };
+        }
+        
+        // 更新用户列表
+        function updateUserList(users) {
+            if (!collaborationRoom) return;
+            
+            collaborationRoom.activeUsers = users;
+            updateActiveUsersList();
+        }
+        
+        // 离开房间
+        async function leaveRoom() {
+            if (!collaborationRoom) return;
+            
+            // 清理轮询
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+            
+            // 通知服务器离开
+            try {
+                await fetch(ESA_COLLAB_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'leave_room',
+                        roomId: collaborationRoom.id,
+                        userId: userId
+                    })
+                });
+            } catch (error) {
+                console.error('离开房间错误:', error);
+            }
+            
+            // 重置状态
+            collaborationRoom = null;
+            
+            // 更新UI
+            updateCollaborationUI();
+            
+            showNotification('已离开协作房间', 'info');
+        }
+        
+        // 更新协作UI
+        function updateCollaborationUI() {
+            const isInRoom = collaborationRoom !== null;
+            
+            // 显示/隐藏协作状态栏
+            document.getElementById('collaboration-status').classList.toggle('hidden', !isInRoom);
+            document.getElementById('collab-badge').classList.toggle('hidden', !isInRoom);
+            document.getElementById('sync-status').classList.toggle('hidden', !isInRoom);
+            
+            if (isInRoom) {
+                // 更新房间信息
+                document.getElementById('room-id-display').textContent = collaborationRoom.id;
+                document.getElementById('collab-user-count').textContent = collaborationRoom.activeUsers.length;
+                document.getElementById('current-chat-title').textContent = collaborationRoom.name;
+                document.getElementById('user-count').textContent = collaborationRoom.activeUsers.length;
+                
+                // 更新用户列表
+                updateActiveUsersList();
+                
+                // 更新区域显示
+                document.getElementById('region-badge').classList.remove('hidden');
+                document.getElementById('current-region-label').textContent = 
+                    getRegionLabel(currentRegion).name;
+                    
+                // 更新房间状态
+                updateRoomStatus('online');
+            } else {
+                // 隐藏区域标签
+                document.getElementById('region-badge').classList.add('hidden');
+            }
+        }
+        
+        // 更新活跃用户列表
+        function updateActiveUsersList() {
+            if (!collaborationRoom) return;
+            
+            const listElement = document.getElementById('active-users-list');
+            listElement.innerHTML = '';
+            
+            collaborationRoom.activeUsers.forEach(user => {
+                const userElement = document.createElement('div');
+                userElement.className = 'flex items-center justify-between text-xs';
+                
+                const userInfo = document.createElement('div');
+                userInfo.className = 'flex items-center gap-2';
+                
+                const userAvatar = document.createElement('div');
+                userAvatar.className = `user-avatar user-color-${user.color || 0}`;
+                userAvatar.textContent = user.name.substring(0, 1);
+                
+                const userNameSpan = document.createElement('span');
+                userNameSpan.className = 'text-slate-300';
+                userNameSpan.textContent = user.name;
+                
+                userInfo.appendChild(userAvatar);
+                userInfo.appendChild(userNameSpan);
+                
+                if (user.isHost) {
+                    const hostBadge = document.createElement('span');
+                    hostBadge.className = 'text-[10px] bg-purple-900 text-purple-300 px-1.5 py-0.5 rounded';
+                    hostBadge.textContent = '主持人';
+                    userElement.appendChild(hostBadge);
+                }
+                
+                if (user.id === userId) {
+                    const youBadge = document.createElement('span');
+                    youBadge.className = 'text-[10px] bg-blue-900 text-blue-300 px-1.5 py-0.5 rounded';
+                    youBadge.textContent = '你';
+                    userElement.appendChild(youBadge);
+                }
+                
+                userElement.appendChild(userInfo);
+                listElement.appendChild(userElement);
+            });
+            
+            // 更新顶部徽章
+            document.getElementById('collab-user-count').textContent = collaborationRoom.activeUsers.length;
+        }
+        
+        // 更新房间状态
+        function updateRoomStatus(status) {
+            const statusElement = document.getElementById('room-status');
+            statusElement.textContent = status === 'online' ? '在线' : '离线';
+            statusElement.className = `connection-status ${status === 'online' ? 'status-online' : 'status-offline'}`;
+        }
+
+        // ================= 模态框控制 =================
+        function showCreateRoomModal() {
+            document.getElementById('create-room-modal').classList.remove('hidden');
+        }
+        
+        function closeCreateRoomModal() {
+            document.getElementById('create-room-modal').classList.add('hidden');
+        }
+        
+        function showJoinRoomModal() {
+            document.getElementById('join-room-modal').classList.remove('hidden');
+        }
+        
+        function closeJoinRoomModal() {
+            document.getElementById('join-room-modal').classList.add('hidden');
+        }
+        
+        function showShareRoomModal(roomId) {
+            const shareUrl = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+            document.getElementById('share-room-id').textContent = roomId;
+            document.getElementById('share-room-url').value = shareUrl;
+            
+            document.getElementById('share-room-modal').classList.remove('hidden');
+        }
+        
+        function closeShareRoomModal() {
+            document.getElementById('share-room-modal').classList.add('hidden');
+        }
+        
+        // ================= 工具函数 =================
+        function copyRoomId() {
+            if (collaborationRoom) {
+                navigator.clipboard.writeText(collaborationRoom.id)
+                    .then(() => showNotification('房间ID已复制到剪贴板', 'success'))
+                    .catch(err => console.error('复制失败:', err));
+            }
+        }
+        
+        function copyShareUrl() {
+            const shareUrl = document.getElementById('share-room-url').value;
+            navigator.clipboard.writeText(shareUrl)
+                .then(() => showNotification('分享链接已复制到剪贴板', 'success'))
+                .catch(err => console.error('复制失败:', err));
+        }
+        
+        function showNotification(message, type = 'info') {
+            // 创建通知元素
+            const notification = document.createElement('div');
+            notification.className = `fixed top-4 right-4 px-4 py-3 rounded-lg shadow-lg z-50 animate-slide-up ${
+                type === 'success' ? 'bg-green-500 text-white' :
+                type === 'error' ? 'bg-red-500 text-white' :
+                'bg-blue-500 text-white'
+            }`;
+            
+            notification.innerHTML = `
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid ${
+                        type === 'success' ? 'fa-check-circle' :
+                        type === 'error' ? 'fa-exclamation-circle' :
+                        'fa-info-circle'
+                    }"></i>
+                    <span class="text-sm font-medium">${message}</span>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            // 3秒后移除
+            setTimeout(() => {
+                notification.classList.add('opacity-0', 'transition-opacity', 'duration-300');
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 300);
+            }, 3000);
+        }
+        
+        // ================= 核心：公式渲染引擎 =================
+        function renderContent(text) {
+            if (!text) return "";
+            
+            const mathMap = {};
+            let mathIndex = 0;
+            const generateToken = () => `MathToken${Date.now()}_${mathIndex++}_EndToken`;
+
+            const replaceAndStore = (str, regex, wrapperStart = '', wrapperEnd = '') => {
+                return str.replace(regex, (match, p1) => {
+                    let content = p1 || match;
+                    content = content.replace(/\$/g, '');
+                    const token = generateToken();
+                    mathMap[token] = wrapperStart + content + wrapperEnd;
+                    return token;
+                });
+            };
+
+            let safeText = text;
+            safeText = replaceAndStore(safeText, /\\boxed\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/g);
+            safeText = replaceAndStore(safeText, /\$\$([\s\S]*?)\$\$/g, '$$', '$$');
+            safeText = replaceAndStore(safeText, /\\\[([\s\S]*?)\\\]/g, '$$', '$$');
+            safeText = replaceAndStore(safeText, /(\\begin\{[a-z]+\*?\}[\s\S]*?\\end\{[a-z]+\*?\})/g, '$$', '$$');
+            safeText = replaceAndStore(safeText, /\\\(([\s\S]*?)\\\)/g, '\\(', '\\)');
+            safeText = replaceAndStore(safeText, /(?<!\\)\$([^$\n]+?)(?<!\\)\$/g, '\\(', '\\)');
+
+            let html = marked.parse(safeText);
+            Object.keys(mathMap).forEach(token => {
+                html = html.replace(token, mathMap[token]);
+            });
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+            
+            renderMathInElement(tempDiv, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '\\(', right: '\\)', display: false},
+                    {left: '\\begin{equation}', right: '\\end{equation}', display: true},
+                    {left: '\\begin{align}', right: '\\end{align}', display: true},
+                    {left: '\\begin{alignat}', right: '\\end{alignat}', display: true},
+                    {left: '\\begin{gather}', right: '\\end{gather}', display: true},
+                    {left: '\\begin{CD}', right: '\\end{CD}', display: true},
+                    {left: '\\[', right: '\\]', display: true}
+                ],
+                throwOnError: false,
+                output: 'html', 
+                strict: false,
+                trust: true
+            });
+
+            return tempDiv.innerHTML;
+        }
+
+        // ================= ESA 节点模拟 =================
+        function simulateRegionSwitch() {
+            const select = document.getElementById('edge-region');
+            currentRegion = select.value;
+            const latDisplay = document.getElementById('latency-display');
+            
+            latDisplay.innerHTML = "...";
+            latDisplay.parentElement.className = "text-[10px] text-yellow-500 flex items-center gap-1";
+            
+            setTimeout(() => {
+                const latencies = { 'bj': '12ms', 'sg': '45ms', 'fra': '170ms', 'us': '140ms' };
+                latDisplay.innerHTML = latencies[currentRegion];
+                latDisplay.parentElement.className = "text-[10px] text-green-400 flex items-center gap-1";
+                renderStreamView(); 
+                if(cy) initTree();
+                
+                // 更新区域显示
+                if (collaborationRoom) {
+                    document.getElementById('current-region-label').textContent = 
+                        getRegionLabel(currentRegion).name;
+                }
+            }, 500);
+        }
+
+        function getRegionLabel(code) {
+            const map = {
+                'bj': { flag: '🇨🇳', name: 'CN-BJ' },
+                'sg': { flag: '🇸🇬', name: 'AP-SG' },
+                'fra': { flag: '🇩🇪', name: 'EU-FRA' },
+                'us': { flag: '🇺🇸', name: 'US-SV' }
+            };
+            return map[code] || map['bj'];
+        }
+        
+        function updateRegionDisplay() {
+            if (collaborationRoom) {
+                document.getElementById('current-region-label').textContent = 
+                    getRegionLabel(currentRegion).name;
+                document.getElementById('region-badge').classList.remove('hidden');
+            }
+        }
+
+        // ================= 节点管理 =================
+        function createNode(role, content, parentId = null, systemPromptSnapshot = null) {
+            const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+            const node = { 
+                id, parentId, role, content, 
+                children: [], 
+                timestamp: Date.now(),
+                systemPrompt: systemPromptSnapshot || currentSystemPrompt,
+                region: currentRegion 
+            };
+            nodeMap[id] = node;
+            if (parentId && nodeMap[parentId]) nodeMap[parentId].children.push(id);
+            else rootId = id;
+            
+            // 广播节点添加操作
+            if (collaborationRoom) {
+                broadcastNodeOperation({
+                    type: 'add_node',
+                    node: node
+                });
+            }
+            
+            return node;
+        }
+
+        // ================= 视图逻辑 =================
+        function renderStreamView() {
+            const container = document.getElementById('chat-container');
+            container.innerHTML = ''; 
+            if (!activeNodeId) return;
+
+            const path = getLineage(activeNodeId);
+            const lastNode = path[path.length - 1];
+            if (lastNode && lastNode.systemPrompt) currentSystemPrompt = lastNode.systemPrompt;
+            if (lastNode && lastNode.region) currentRegion = lastNode.region; 
+
+            updateRegionDisplay();
+
+            path.forEach(node => {
+                const isUser = node.role === 'user';
+                const regInfo = getRegionLabel(node.region || 'bj');
+                
+                let branchNav = '';
+                if (node.parentId) {
+                    const parent = nodeMap[node.parentId];
+                    if (parent && parent.children.length > 1) {
+                        const idx = parent.children.indexOf(node.id);
+                        branchNav = `
+                            <div class="flex items-center gap-2 text-xs text-gray-400 mb-1 select-none">
+                                <button onclick="switchSibling('${parent.id}', -1, '${node.id}')" class="hover:text-blue-600 p-1"><i class="fa-solid fa-chevron-left"></i></button>
+                                <span>分支 ${idx + 1}/${parent.children.length}</span>
+                                <button onclick="switchSibling('${parent.id}', 1, '${node.id}')" class="hover:text-blue-600 p-1"><i class="fa-solid fa-chevron-right"></i></button>
+                            </div>`;
+                    }
+                }
+
+                const div = document.createElement('div');
+                div.className = `flex flex-col ${isUser ? 'items-end' : 'items-start'} animate-slide-up`;
+                
+                const renderedHtml = renderContent(node.content);
+                
+                const regionTag = `<div class="absolute -top-3 ${isUser?'right-2':'left-2'} bg-slate-100 border border-slate-200 text-[9px] text-slate-500 px-1.5 rounded-full shadow-sm select-none z-10 flex items-center gap-1">
+                    <span>${regInfo.flag}</span> <span class="font-mono">ESA:${regInfo.name}</span>
+                </div>`;
+
+                div.innerHTML = `
+                    <div class="flex flex-col ${isUser ? 'items-end' : 'items-start'} max-w-[90%] lg:max-w-[80%] group relative mt-4">
+                        ${regionTag}
+                        ${branchNav}
+                        <div class="relative px-5 py-3 rounded-2xl shadow-sm text-sm leading-relaxed ${isUser ? 'bg-blue-600 text-white rounded-tr-none' : 'bg-white border border-gray-100 text-gray-800 rounded-tl-none'}">
+                            <div class="prose prose-sm max-w-none ${isUser?'text-white':''}">${renderedHtml}</div>
+                            <div class="absolute -bottom-6 ${isUser ? 'right-0' : 'left-0'} opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                <button onclick="setBranchPoint('${node.id}')" class="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-1 bg-white/80 px-2 py-1 rounded shadow-sm border">
+                                    <i class="fa-solid fa-code-branch"></i> 在此分叉
+                                </button>
+                            </div>
+                        </div>
+                    </div>`;
+                container.appendChild(div);
+            });
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function getLineage(endNodeId) {
+            const path = [];
+            let curr = endNodeId;
+            while (curr && nodeMap[curr]) {
+                path.unshift(nodeMap[curr]);
+                curr = nodeMap[curr].parentId;
+            }
+            return path;
+        }
+        
+        function switchSibling(parentId, direction, currentNodeId) {
+            const parent = nodeMap[parentId];
+            const idx = parent.children.indexOf(currentNodeId);
+            const nextIdx = idx + direction;
+            if (nextIdx >= 0 && nextIdx < parent.children.length) {
+                activeNodeId = findDeepestLatestDescendant(parent.children[nextIdx]);
+                renderStreamView();
+                saveCurrentChat();
+                
+                // 广播活动节点变更
+                if (collaborationRoom) {
+                    broadcastNodeOperation({
+                        type: 'set_active_node',
+                        nodeId: activeNodeId
+                    });
+                }
+            }
+        }
+        
+        function findDeepestLatestDescendant(nodeId) {
+            let curr = nodeMap[nodeId];
+            while(curr.children && curr.children.length > 0) {
+                curr = nodeMap[curr.children[curr.children.length - 1]];
+            }
+            return curr.id;
+        }
+        
+        function setBranchPoint(nodeId) {
+            branchParentId = nodeId;
+            document.getElementById('branch-indicator').classList.remove('hidden');
+            document.getElementById('user-input').focus();
+        }
+        
+        function cancelBranching() {
+            branchParentId = null;
+            document.getElementById('branch-indicator').classList.add('hidden');
+        }
+
+        // ================= 发送消息（直接调用AI API） =================
+        async function sendMessage() {
+            const inputEl = document.getElementById('user-input');
+            let content = inputEl.value.trim();
+            if (!content && !currentFileContent) return;
+            inputEl.value = ''; inputEl.style.height = 'auto';
+
+            let displayContent = content; 
+            let finalPrompt = content;
+
+            if (currentFileContent) {
+                finalPrompt = `【文档内容】\n${currentFileContent}\n\n【用户指令】\n${content || "请分析文档"}`;
+                displayContent = `📂 [Word] ${currentFileName}\n${content}`;
+                clearFile();
+            }
+
+            let parentId = branchParentId || activeNodeId;
+            let userNode;
+
+            if (!rootId && !parentId) {
+                userNode = createNode('user', displayContent, null); 
+                activeNodeId = userNode.id;
+            } else {
+                userNode = createNode('user', displayContent, parentId);
+                parentId = userNode.id;
+                activeNodeId = userNode.id;
+            }
+            
+            cancelBranching();
+            renderStreamView();
+            saveCurrentChat();
+
+            const historyNodes = getLineage(parentId);
+            const messages = historyNodes.map(n => ({
+                role: n.role,
+                content: n.id === userNode.id ? finalPrompt : n.content 
+            }));
+            messages.unshift({ role: "system", content: currentSystemPrompt });
+
+            const container = document.getElementById('chat-container');
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = "flex flex-col items-start animate-slide-up mt-4";
+            loadingDiv.innerHTML = `<div class="bg-white border border-gray-100 px-5 py-3 rounded-2xl rounded-tl-none shadow-sm"><div class="flex gap-1 h-5 items-center"><div class="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div><div class="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div></div></div>`;
+            container.appendChild(loadingDiv);
+            container.scrollTop = container.scrollHeight;
+
+            try {
+                const aiNode = createNode('assistant', '', parentId);
+                activeNodeId = aiNode.id;
+
+                // 🔥 直接调用DeepSeek API（前端直接调用，绕过ESA限制）
+                const response = await fetch(DEEPSEEK_API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ 
+                        model: "deepseek-v3", 
+                        messages: messages,
+                        stream: false, // 使用非流式，避免长时间连接
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`API Error: ${response.status} - ${errorText}`);
+                }
+                
+                const data = await response.json();
+                
+                loadingDiv.remove();
+                renderStreamView(); 
+                
+                // 更新AI节点内容
+                if (data.choices && data.choices[0] && data.choices[0].message) {
+                    aiNode.content = data.choices[0].message.content;
+                    
+                    // 广播AI节点更新
+                    if (collaborationRoom) {
+                        broadcastNodeOperation({
+                            type: 'update_node',
+                            nodeId: aiNode.id,
+                            content: aiNode.content,
+                            systemPrompt: currentSystemPrompt
+                        });
+                    }
+                } else {
+                    throw new Error('API返回格式错误');
+                }
+                
+                // 重新渲染显示AI回复
+                renderStreamView();
+                saveCurrentChat();
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                loadingDiv.innerHTML = `<div class="text-red-500 px-4 py-2 bg-red-50 rounded border border-red-200">
+                    <div class="font-semibold">AI请求失败</div>
+                    <div class="text-sm">${error.message}</div>
+                    <div class="text-xs mt-1">请检查API Key或网络连接</div>
+                </div>`;
+                
+                // 创建错误节点
+                const aiNode = createNode('assistant', 'AI服务暂时不可用，请稍后重试。', parentId);
+                activeNodeId = aiNode.id;
+                renderStreamView();
+                saveCurrentChat();
+            }
+        }
+
+        // ================= 树状图 (Cytoscape) =================
+        let cy = null;
+
+        function toggleView() {
+            const streamView = document.getElementById('stream-view');
+            const treeView = document.getElementById('tree-view');
+            const btnText = document.getElementById('view-toggle-text');
+
+            if (streamView.style.opacity === '0') {
+                streamView.style.opacity = '1';
+                streamView.style.pointerEvents = 'auto';
+                treeView.style.opacity = '0';
+                treeView.style.pointerEvents = 'none';
+                btnText.innerText = "切换思维树视图";
+            } else {
+                streamView.style.opacity = '0';
+                streamView.style.pointerEvents = 'none';
+                treeView.style.opacity = '1';
+                treeView.style.pointerEvents = 'auto';
+                btnText.innerText = "返回对话视图";
+                setTimeout(() => { initTree(); if (cy) { cy.resize(); cy.fit(); } }, 50);
+            }
+        }
+
+        function initTree() {
+            if (!rootId) return;
+            if (cy) cy.destroy();
+
+            const elements = [];
+            Object.values(nodeMap).forEach(node => {
+                const label = node.role === 'user' ? '👤 ' + node.content.substring(0, 10) : '🤖 ' + node.content.substring(0, 10);
+                const safeLabel = label.replace(/\n/g, ' ');
+                elements.push({
+                    data: { 
+                        id: node.id, 
+                        label: safeLabel + (node.content.length > 10 ? '...' : ''),
+                        fullContent: node.content,
+                        role: node.role,
+                        region: node.region || 'bj'
+                    }
+                });
+                if (node.parentId) elements.push({ data: { source: node.parentId, target: node.id } });
+            });
+
+            cy = cytoscape({
+                container: document.getElementById('cy'),
+                elements: elements,
+                wheelSensitivity: 0.05, 
+                minZoom: 0.4,
+                maxZoom: 1.5,
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': ele => ele.data('role') === 'user' ? '#2563eb' : '#ffffff',
+                            'label': 'data(label)',
+                            'color': ele => ele.data('role') === 'user' ? '#fff' : '#334155',
+                            'text-valign': 'center', 'text-halign': 'center',
+                            'width': 'label', 'height': 36, 'padding': '12px',
+                            'shape': 'round-rectangle',
+                            'border-width': 1, 'border-color': '#94a3b8', 'font-size': '12px'
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: { 'width': 2, 'line-color': '#cbd5e1', 'target-arrow-color': '#cbd5e1', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' }
+                    },
+                    {
+                        selector: `#${activeNodeId}`,
+                        style: { 'border-color': '#10b981', 'border-width': 3, 'background-color': '#d1fae5', 'color': '#065f46' }
+                    }
+                ],
+                layout: { name: 'breadthfirst', directed: true, padding: 50, spacingFactor: 1.2 }
+            });
+
+            cy.on('tap', 'node', function(evt){
+                activeNodeId = evt.target.id();
+                renderStreamView(); 
+                toggleView(); 
+                setTimeout(() => {
+                    const allBubbles = document.getElementById('chat-container').querySelectorAll('.group');
+                    if (allBubbles.length > 0) allBubbles[allBubbles.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+                
+                // 广播活动节点变更
+                if (collaborationRoom) {
+                    broadcastNodeOperation({
+                        type: 'set_active_node',
+                        nodeId: activeNodeId
+                    });
+                }
+            });
+
+            cy.on('cxttap', 'node', function(evt){
+                showNodeDetail(evt.target.data());
+            });
+            
+            cy.ready(() => cy.fit());
+        }
+
+        // ================= 弹窗逻辑 =================
+        function showNodeDetail(nodeData) {
+            const modal = document.getElementById('node-detail-modal');
+            const contentDiv = document.getElementById('node-detail-content');
+            const iconSpan = document.getElementById('detail-role-icon');
+            
+            if (nodeData.role === 'user') iconSpan.innerHTML = '<i class="fa-solid fa-user text-blue-600"></i>';
+            else iconSpan.innerHTML = '<i class="fa-solid fa-robot text-purple-600"></i>';
+
+            contentDiv.innerHTML = renderContent(nodeData.fullContent);
+            modal.classList.remove('hidden');
+        }
+
+        function closeNodeDetail() {
+            document.getElementById('node-detail-modal').classList.add('hidden');
+        }
+
+        function copyNodeContent() {
+            const content = document.getElementById('node-detail-content').innerText;
+            navigator.clipboard.writeText(content).then(() => alert('已复制'));
+        }
+
+        function toggleSystemPromptConfig() {
+            const modal = document.getElementById('system-prompt-modal');
+            const input = document.getElementById('system-prompt-input');
+            if (modal.classList.contains('hidden')) {
+                input.value = currentSystemPrompt;
+                modal.classList.remove('hidden');
+            } else {
+                modal.classList.add('hidden');
+            }
+        }
+        
+        function saveSystemPrompt() {
+            const val = document.getElementById('system-prompt-input').value.trim();
+            if (val) {
+                currentSystemPrompt = val;
+                
+                // 广播系统提示词更新
+                if (collaborationRoom) {
+                    broadcastNodeOperation({
+                        type: 'update_system_prompt',
+                        prompt: val
+                    });
+                }
+            }
+            toggleSystemPromptConfig();
+        }
+
+        // ================= 对话管理 =================
+        function saveCurrentChat() {
+            if (!currentChatId) return;
+            
+            const chatData = { 
+                rootId, 
+                activeNodeId, 
+                nodeMap,
+                systemPrompt: currentSystemPrompt
+            };
+            
+            localStorage.setItem(`esa_chat_${currentChatId}`, JSON.stringify(chatData));
+            const rootNode = nodeMap[rootId];
+            const title = rootNode ? rootNode.content.substring(0, 10) + "..." : "新对话";
+            const existingIndex = chatHistory.findIndex(c => c.id === currentChatId);
+            if (existingIndex >= 0) {
+                chatHistory[existingIndex].title = title;
+                chatHistory[existingIndex].timestamp = Date.now();
+            } else {
+                chatHistory.unshift({ id: currentChatId, title, timestamp: Date.now() });
+            }
+            localStorage.setItem('esa_mindforest_history', JSON.stringify(chatHistory));
+            loadSidebar();
+            document.getElementById('current-chat-title').innerText = title;
+        }
+        
+        async function handleFileUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            if (!file.name.endsWith('.docx')) { alert('仅支持 .docx'); return; }
+            const preview = document.getElementById('file-preview');
+            preview.classList.remove('hidden');
+            document.getElementById('file-name').innerText = file.name;
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                currentFileContent = result.value;
+            } catch (e) { alert("解析失败"); }
+        }
+        
+        function clearFile() {
+            document.getElementById('file-upload').value = '';
+            document.getElementById('file-preview').classList.add('hidden');
+            currentFileContent = null;
+        }
+        
+        function loadSidebar() {
+            const listEl = document.getElementById('history-list');
+            listEl.innerHTML = '';
+            chatHistory.forEach(chat => {
+                const item = document.createElement('div');
+                item.className = `p-3 rounded cursor-pointer transition-colors flex justify-between group text-sm mb-1 ${chat.id === currentChatId ? 'bg-slate-800' : 'hover:bg-slate-800'}`;
+                item.innerHTML = `<div class="truncate flex-1" onclick="loadChat('${chat.id}')">${chat.title}</div><button onclick="deleteChat('${chat.id}', event)" class="opacity-0 group-hover:opacity-100 text-slate-500 hover:text-red-400 ml-2"><i class="fa-solid fa-trash"></i></button>`;
+                listEl.appendChild(item);
+            });
+        }
+        
+        function createNewChat() {
+            currentChatId = Date.now().toString();
+            nodeMap = {}; rootId = null; activeNodeId = null; branchParentId = null;
+            currentSystemPrompt = DEFAULT_SYSTEM_PROMPT;
+            autoGreetingEnabled = true;
+            
+            document.getElementById('chat-container').innerHTML = `<div class="text-center text-gray-400 mt-20"><i class="fa-solid fa-seedling text-4xl mb-4 text-green-300"></i><br>开始一颗新的思维树</div>`;
+            document.getElementById('current-chat-title').innerText = "新对话";
+            
+            if (document.getElementById('stream-view').style.opacity === '0') toggleView();
+            loadSidebar();
+            
+            // 自动发送"你好"
+            setTimeout(() => {
+                if (autoGreetingEnabled) {
+                    document.getElementById('user-input').value = '你好';
+                    sendMessage();
+                }
+            }, 500);
+        }
+        
+        function loadChat(chatId) {
+            const dataStr = localStorage.getItem(`esa_chat_${chatId}`);
+            if (!dataStr) return;
+            const data = JSON.parse(dataStr);
+            currentChatId = chatId; 
+            nodeMap = data.nodeMap; 
+            rootId = data.rootId; 
+            activeNodeId = data.activeNodeId;
+            currentSystemPrompt = data.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+            autoGreetingEnabled = false;
+            
+            const hist = chatHistory.find(c => c.id === chatId);
+            if(hist) document.getElementById('current-chat-title').innerText = hist.title;
+            
+            renderStreamView(); 
+            loadSidebar();
+            if (document.getElementById('stream-view').style.opacity === '0') initTree();
+        }
+        
+        function deleteChat(chatId, event) {
+            event.stopPropagation();
+            if(!confirm("删除?")) return;
+            localStorage.removeItem(`esa_chat_${chatId}`);
+            chatHistory = chatHistory.filter(c => c.id !== chatId);
+            localStorage.setItem('esa_mindforest_history', JSON.stringify(chatHistory));
+            if (currentChatId === chatId) createNewChat(); else loadSidebar();
+        }
+    </script>
+</body>
+</html>
