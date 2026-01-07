@@ -1,365 +1,3 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MindForest - ESA边缘协作思维链</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-
-    <style>
-        body, html { height: 100%; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; }
-        
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-
-        #cy {
-            width: 100%; height: 100%;
-            background-color: #f8fafc;
-            background-image: radial-gradient(#cbd5e1 1px, transparent 1px);
-            background-size: 20px 20px;
-            position: absolute; top: 0; left: 0;
-            touch-action: none; 
-            z-index: 0; 
-        }
-
-        .prose { font-size: 0.95rem; line-height: 1.7; }
-        .prose p { margin-bottom: 0.8em; }
-        .prose pre { background: #1e293b !important; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin: 1em 0; }
-        .prose code { background: #f1f5f9; padding: 0.2em 0.4em; border-radius: 0.25rem; color: #ef4444; font-size: 0.9em; font-family: monospace; }
-        .prose pre code { background: transparent; color: inherit; padding: 0; }
-        
-        .prose table { border-collapse: collapse; width: 100%; margin: 1em 0; font-size: 0.9em; }
-        .prose th, .prose td { border: 1px solid #e2e8f0; padding: 8px; text-align: left; }
-        .prose th { background-color: #f8fafc; font-weight: 600; }
-
-        .katex-display { overflow-x: auto; overflow-y: hidden; padding: 0.5em 0; -webkit-overflow-scrolling: touch; }
-        
-        .typing-dot { animation: typing 1.4s infinite ease-in-out both; }
-        .typing-dot:nth-child(1) { animation-delay: -0.32s; }
-        .typing-dot:nth-child(2) { animation-delay: -0.16s; }
-        @keyframes typing { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } }
-        
-        @keyframes slideUp { from { transform: translateY(10px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .animate-slide-up { animation: slideUp 0.2s ease-out forwards; }
-        
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-        
-        .region-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 6px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
-            color: white;
-            border: 1px solid #1e40af;
-        }
-        
-        .connection-status {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        
-        .status-online {
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-        }
-        
-        .status-offline {
-            background: linear-gradient(135deg, #6b7280, #4b5563);
-            color: white;
-        }
-        
-        .user-avatar {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: bold;
-            color: white;
-        }
-        
-        .user-color-0 { background-color: #3b82f6; }
-        .user-color-1 { background-color: #10b981; }
-        .user-color-2 { background-color: #f59e0b; }
-        .user-color-3 { background-color: #ef4444; }
-        .user-color-4 { background-color: #8b5cf6; }
-        .user-color-5 { background-color: #ec4899; }
-    </style>
-</head>
-<body class="bg-gray-50 text-gray-800 flex" oncontextmenu="return false;"> 
-    <!-- 侧边栏 -->
-    <aside class="w-64 bg-slate-900 text-white flex flex-col flex-shrink-0 z-40 shadow-xl relative" id="sidebar">
-        <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-900">
-            <h1 class="font-bold text-xl tracking-wider"><i class="fa-solid fa-tree mr-2 text-green-400"></i>MindForest</h1>
-        </div>
-        
-        <div class="px-4 py-3 bg-slate-800 border-b border-slate-700">
-            <div class="flex justify-between items-center mb-1">
-                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Edge Access Point</span>
-                <span class="flex items-center gap-1 text-[10px] text-green-400">
-                    <span class="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></span>
-                    <span id="latency-display">12ms</span>
-                </span>
-            </div>
-            <select id="edge-region" class="w-full bg-slate-700 text-xs text-white border border-slate-600 rounded px-2 py-1.5 focus:outline-none focus:border-blue-500 cursor-pointer" onchange="simulateRegionSwitch()">
-                <option value="bj">🇨🇳 CN-Beijing (Aliyun)</option>
-                <option value="sg">🇸🇬 AP-Singapore (ESA)</option>
-                <option value="fra">🇩🇪 EU-Frankfurt (ESA)</option>
-                <option value="us">🇺🇸 US-Silicon Valley</option>
-            </select>
-        </div>
-
-        <div class="p-3">
-            <button onclick="createNewChat()" class="w-full bg-blue-600 hover:bg-blue-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg text-sm font-medium mb-2">
-                <i class="fa-solid fa-plus"></i> 新建思维链
-            </button>
-            <button onclick="showCreateRoomModal()" class="w-full bg-purple-600 hover:bg-purple-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg text-sm font-medium mb-2">
-                <i class="fa-solid fa-users"></i> 创建协作房间
-            </button>
-            <button onclick="showJoinRoomModal()" class="w-full bg-green-600 hover:bg-green-500 text-white py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors shadow-lg text-sm font-medium">
-                <i class="fa-solid fa-door-open"></i> 加入协作房间
-            </button>
-        </div>
-
-        <!-- 协作房间状态 -->
-        <div id="collaboration-status" class="hidden p-3 border-t border-slate-700">
-            <div class="flex items-center justify-between mb-2">
-                <span class="text-xs font-semibold text-slate-300">协作房间</span>
-                <span id="room-status" class="connection-status status-online">在线</span>
-            </div>
-            <div class="mb-2">
-                <div class="text-xs text-slate-400 mb-1">房间ID:</div>
-                <div class="flex items-center gap-2">
-                    <code id="room-id-display" class="text-xs bg-slate-800 px-2 py-1 rounded flex-1 truncate"></code>
-                    <button onclick="copyRoomId()" class="text-slate-400 hover:text-white p-1" title="复制房间ID">
-                        <i class="fa-regular fa-copy text-xs"></i>
-                    </button>
-                </div>
-            </div>
-            <div class="mb-3">
-                <div class="text-xs text-slate-400 mb-1">在线用户 (<span id="user-count">1</span>):</div>
-                <div id="active-users-list" class="space-y-2"></div>
-            </div>
-            <button onclick="leaveRoom()" class="w-full bg-red-600 hover:bg-red-500 text-white py-1.5 px-3 rounded text-xs flex items-center justify-center gap-2 transition-colors">
-                <i class="fa-solid fa-sign-out-alt"></i> 离开房间
-            </button>
-        </div>
-
-        <div class="flex-1 overflow-y-auto px-3 py-2 space-y-2" id="history-list"></div>
-
-        <div class="p-4 border-t border-slate-700 text-[10px] text-slate-400 text-center select-none">
-            Accelerated by Aliyun ESA Edge
-        </div>
-    </aside>
-
-    <!-- 主内容区 -->
-    <main class="flex-1 flex flex-col relative h-full">
-        <header class="h-14 bg-white border-b flex items-center justify-between px-6 shadow-sm z-30 relative">
-            <div class="flex items-center gap-4">
-                <span id="current-chat-title" class="font-semibold text-gray-700">未命名对话</span>
-                <!-- 协作房间标签 -->
-                <div id="collab-badge" class="hidden flex items-center gap-2 bg-gradient-to-r from-purple-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-semibold">
-                    <i class="fa-solid fa-users"></i>
-                    <span id="collab-user-count">1</span>人在线
-                </div>
-                <!-- 区域标签 -->
-                <div id="region-badge" class="hidden region-tag">
-                    <i class="fa-solid fa-satellite"></i>
-                    <span id="current-region-label">CN-BJ</span>
-                </div>
-            </div>
-            <div class="flex items-center gap-3">
-                <div id="sync-status" class="hidden flex items-center gap-1 text-xs text-gray-500">
-                    <div class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span>实时同步中</span>
-                </div>
-                <button onclick="toggleView()" class="flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors font-medium text-sm border border-slate-300">
-                    <i class="fa-solid fa-project-diagram"></i>
-                    <span id="view-toggle-text">切换思维树视图</span>
-                </button>
-            </div>
-        </header>
-
-        <div class="flex-1 relative overflow-hidden">
-            <!-- 对话视图 -->
-            <div id="stream-view" class="absolute inset-0 flex flex-col bg-white z-10 transition-opacity duration-300">
-                <div id="chat-container" class="flex-1 overflow-y-auto p-4 space-y-6 pb-48"></div>
-
-                <div class="border-t bg-white p-4 absolute bottom-0 w-full z-20 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
-                    <div class="flex flex-wrap gap-2 mb-2 px-1">
-                        <div id="branch-indicator" class="hidden text-xs text-blue-600 font-semibold flex items-center gap-2 bg-blue-50 p-1.5 rounded border border-blue-100 animate-slide-up">
-                            <i class="fa-solid fa-code-branch"></i>
-                            <span>正在基于历史节点创建新分支...</span>
-                            <button onclick="cancelBranching()" class="ml-2 hover:text-blue-800"><i class="fa-solid fa-times"></i></button>
-                        </div>
-                        <div id="file-preview" class="hidden flex items-center gap-2 bg-gray-100 p-1.5 rounded text-xs border border-gray-200 animate-slide-up">
-                            <i class="fa-solid fa-file-word text-blue-600"></i>
-                            <span id="file-name" class="font-mono text-gray-700 truncate max-w-[150px]">doc.docx</span>
-                            <button onclick="clearFile()" class="ml-1 text-gray-500 hover:text-red-500"><i class="fa-solid fa-times"></i></button>
-                        </div>
-                    </div>
-
-                    <div class="relative max-w-5xl mx-auto flex gap-3 items-end">
-                        <div class="flex flex-col gap-2 pb-1">
-                            <button onclick="toggleSystemPromptConfig()" class="p-2 text-gray-500 hover:bg-purple-100 hover:text-purple-600 rounded-full transition-colors relative" title="设置 AI 人设">
-                                <i class="fa-solid fa-masks-theater"></i>
-                            </button>
-                            <button onclick="document.getElementById('file-upload').click()" class="p-2 text-gray-500 hover:bg-blue-100 hover:text-blue-600 rounded-full transition-colors" title="上传 Word 文档">
-                                <i class="fa-solid fa-paperclip"></i>
-                            </button>
-                        </div>
-                        <input type="file" id="file-upload" class="hidden" accept=".docx" onchange="handleFileUpload(this)">
-
-                        <div class="flex-1 relative">
-                            <textarea id="user-input" rows="1" class="w-full pl-4 pr-12 py-3 bg-gray-100 border-0 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white resize-none shadow-sm max-h-32 overflow-y-auto text-sm" placeholder="输入内容... Enter 发送, Shift+Enter 换行" oninput="this.style.height='';this.style.height=Math.min(this.scrollHeight, 128)+'px'"></textarea>
-                            <button onclick="sendMessage()" class="absolute right-2 bottom-2 p-2 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors">
-                                <i class="fa-solid fa-paper-plane text-lg"></i>
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 思维树视图 -->
-            <div id="tree-view" class="absolute inset-0 opacity-0 pointer-events-none transition-opacity duration-300 z-20 bg-slate-50">
-                <div id="cy"></div>
-                
-                <div class="absolute bottom-6 left-6 bg-white/90 backdrop-blur p-4 rounded-lg shadow-xl border border-gray-200 text-sm max-w-xs z-30 select-none pointer-events-none">
-                    <h3 class="font-bold mb-2 text-gray-800 flex items-center gap-2"><i class="fa-solid fa-sitemap text-blue-500"></i> 操作指南</h3>
-                    <ul class="space-y-1 text-gray-600 text-xs pl-1">
-                        <li><i class="fa-solid fa-arrow-pointer w-4"></i> <b>左键点击</b>：跳转到该节点</li>
-                        <li><i class="fa-regular fa-eye w-4"></i> <b>右键点击</b>：查看详细内容</li>
-                        <li><i class="fa-solid fa-up-down-left-right w-4"></i> <b>滚轮/拖拽</b>：平移缩放</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- 各种模态框 -->
-    <div id="system-prompt-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
-            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-masks-theater text-purple-600"></i> 设置 AI 人设</h3>
-            <textarea id="system-prompt-input" class="w-full h-32 p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 text-sm resize-none" placeholder="在此输入 System Prompt..."></textarea>
-            <div class="flex justify-end gap-2 mt-4">
-                <button onclick="toggleSystemPromptConfig()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">取消</button>
-                <button onclick="saveSystemPrompt()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">确认</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="node-detail-modal" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center backdrop-blur-sm" onclick="closeNodeDetail()">
-        <div class="bg-white rounded-xl shadow-2xl w-[800px] max-w-[95%] max-h-[85vh] flex flex-col animate-slide-up" onclick="event.stopPropagation()">
-            <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none">
-                <div class="flex items-center gap-2">
-                    <span id="detail-role-icon"></span>
-                    <h3 class="font-bold text-gray-700">节点详情</h3>
-                </div>
-                <button onclick="closeNodeDetail()" class="text-gray-400 hover:text-gray-600 w-8 h-8 rounded-full hover:bg-gray-200 flex items-center justify-center"><i class="fa-solid fa-times"></i></button>
-            </div>
-            <div class="p-6 overflow-y-auto prose prose-sm max-w-none" id="node-detail-content"></div>
-            <div class="p-4 border-t bg-gray-50 rounded-b-xl flex justify-end">
-                <button onclick="copyNodeContent()" class="text-blue-600 text-sm hover:underline"><i class="fa-regular fa-copy"></i> 复制内容</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="create-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
-            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-users text-purple-600"></i> 创建协作房间</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">房间名称</label>
-                    <input type="text" id="room-name-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 text-sm" placeholder="例如：量子计算研究讨论" value="协作思维树">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">您的显示名称</label>
-                    <input type="text" id="host-name-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-purple-500 text-sm" placeholder="输入您在房间中的显示名称" value="主持人">
-                </div>
-            </div>
-            <div class="flex justify-end gap-2 mt-6">
-                <button onclick="closeCreateRoomModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">取消</button>
-                <button onclick="createCollaborationRoom()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm">创建房间</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="join-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
-            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-door-open text-green-600"></i> 加入协作房间</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">房间ID或分享链接</label>
-                    <input type="text" id="room-id-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 text-sm" placeholder="输入房间ID或完整链接">
-                    <p class="text-xs text-gray-500 mt-1">房间ID示例: <code class="bg-gray-100 px-1">room_abc123</code></p>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">您的显示名称</label>
-                    <input type="text" id="user-name-input" class="w-full p-3 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 text-sm" placeholder="输入您在房间中的显示名称" value="协作者">
-                </div>
-            </div>
-            <div class="flex justify-end gap-2 mt-6">
-                <button onclick="closeJoinRoomModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">取消</button>
-                <button onclick="joinCollaborationRoom()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm">加入房间</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="share-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
-        <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
-            <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-share-nodes text-blue-600"></i> 分享协作房间</h3>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">房间ID</label>
-                    <div class="flex items-center gap-2">
-                        <code id="share-room-id" class="flex-1 p-3 border rounded-lg bg-gray-50 text-sm font-mono truncate"></code>
-                        <button onclick="copyRoomId()" class="p-3 border rounded-lg hover:bg-gray-50">
-                            <i class="fa-regular fa-copy"></i>
-                        </button>
-                    </div>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium text-gray-scale-700 mb-1">分享链接</label>
-                    <div class="flex items-center gap-2">
-                        <input type="text" id="share-room-url" readonly class="flex-1 p-3 border rounded-lg bg-gray-50 text-sm truncate">
-                        <button onclick="copyShareUrl()" class="p-3 border rounded-lg hover:bg-gray-50">
-                            <i class="fa-regular fa-copy"></i>
-                        </button>
-                    </div>
-                </div>
-                <div class="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                    <p class="text-sm text-blue-700 flex items-start gap-2">
-                        <i class="fa-solid fa-info-circle mt-0.5"></i>
-                        <span>将此链接发送给其他人，他们即可加入房间参与实时协作。</span>
-                    </p>
-                </div>
-            </div>
-            <div class="flex justify-end mt-6">
-                <button onclick="closeShareRoomModal()" class="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg text-sm">关闭</button>
-            </div>
-        </div>
-    </div>
-
     <script>
         // ================= 配置 =================
         const DEFAULT_SYSTEM_PROMPT = "你是一个智能助手。回答要专业、清晰，使用Markdown格式。";
@@ -442,25 +80,26 @@
             if (savedName) {
                 userName = savedName;
             }
+            
+            console.log('页面初始化完成，用户ID:', userId);
         });
 
         // ================= 协作功能 =================
         
         // 创建协作房间
-        // 在index.html中找到createCollaborationRoom函数，修改如下：
-            async function createCollaborationRoom() {
-              const roomName = document.getElementById('room-name-input').value || "协作思维树";
-              const hostName = document.getElementById('host-name-input').value.trim() || "主持人";
-              
-              // 生成房间ID
-              const roomId = generateRoomId();
-              
-              // 保存用户名
-              userName = hostName;
-              localStorage.setItem('esa_user_name', userName);
-              
-              // 创建房间数据
-              collaborationRoom = {
+        async function createCollaborationRoom() {
+            const roomName = document.getElementById('room-name-input').value || "协作思维树";
+            const hostName = document.getElementById('host-name-input').value.trim() || "主持人";
+            
+            // 生成房间ID
+            const roomId = generateRoomId();
+            
+            // 保存用户名
+            userName = hostName;
+            localStorage.setItem('esa_user_name', userName);
+            
+            // 创建房间数据
+            collaborationRoom = {
                 id: roomId,
                 name: roomName,
                 method: 'polling',
@@ -468,59 +107,59 @@
                 createdByName: userName,
                 createdAt: new Date().toISOString(),
                 activeUsers: [{
-                  id: userId,
-                  name: userName,
-                  color: getUserColor(userId),
-                  region: currentRegion,
-                  joinedAt: new Date().toISOString(),
-                  isHost: true
+                    id: userId,
+                    name: userName,
+                    color: getUserColor(userId),
+                    region: currentRegion,
+                    joinedAt: new Date().toISOString(),
+                    isHost: true
                 }]
-              };
-              
-              // 创建当前思维树的快照
-              const snapshot = getCurrentSnapshot();
-              
-              try {
+            };
+            
+            // 创建当前思维树的快照
+            const snapshot = getCurrentSnapshot();
+            
+            try {
                 // 调用ESA API创建房间
                 const response = await fetch(ESA_COLLAB_API, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    action: 'create_room',
-                    roomId: roomId,
-                    roomData: collaborationRoom,
-                    snapshot: snapshot,
-                    userId: userId,
-                    userName: userName
-                  })
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'create_room',
+                        roomId: roomId,
+                        roomData: collaborationRoom,
+                        snapshot: snapshot,
+                        userId: userId,
+                        userName: userName
+                    })
                 });
                 
                 if (response.ok) {
-                  const data = await response.json();
-                  
-                  // 初始化轮询同步
-                  initPolling(roomId);
-                  
-                  // 更新UI
-                  updateCollaborationUI();
-                  
-                  // 关闭模态框，显示分享模态框
-                  closeCreateRoomModal();
-                  setTimeout(() => {
-                    showShareRoomModal(roomId);
-                  }, 300);
-                  
-                  showNotification(`协作房间 "${roomName}" 创建成功！`, 'success');
+                    const data = await response.json();
+                    
+                    // 初始化轮询同步
+                    initPolling(roomId);
+                    
+                    // 更新UI
+                    updateCollaborationUI();
+                    
+                    // 关闭模态框，显示分享模态框
+                    closeCreateRoomModal();
+                    setTimeout(() => {
+                        showShareRoomModal(roomId);
+                    }, 300);
+                    
+                    showNotification(`协作房间 "${roomName}" 创建成功！`, 'success');
                 } else {
-                  const errorText = await response.text();
-                  console.error('创建房间失败:', errorText);
-                  showNotification('创建房间失败: ' + errorText, 'error');
+                    const errorText = await response.text();
+                    console.error('创建房间失败:', errorText);
+                    showNotification('创建房间失败: ' + errorText, 'error');
                 }
-              } catch (error) {
+            } catch (error) {
                 console.error('创建房间错误:', error);
                 showNotification('创建房间失败: ' + error.message, 'error');
-              }
             }
+        }
         
         // 加入协作房间
         async function joinCollaborationRoom() {
@@ -602,271 +241,249 @@
             }
         }
         
-                // 初始化轮询同步
+        // 初始化轮询同步
         function initPolling(roomId) {
-          updateRoomStatus('online');
-          
-          console.log('初始化轮询同步，房间:', roomId);
-          
-          // 设置轮询间隔
-          syncInterval = setInterval(async () => {
-            try {
-              const response = await fetch(`${ESA_COLLAB_API}?action=get_updates&roomId=${roomId}&userId=${userId}&lastSync=${lastSyncTime}`);
-              
-              if (response.ok) {
-                const data = await response.json();
-                console.log('轮询更新:', data.updates?.length || 0, '个操作');
-                
-                lastSyncTime = Date.now();
-                
-                if (data.updates && data.updates.length > 0) {
-                  data.updates.forEach(update => {
-                    console.log('处理远程操作:', update.type, '来自:', update.userName);
-                    applyRemoteOperation(update);
-                  });
-                }
-                
-                if (data.users) {
-                  updateUserList(data.users);
-                }
-              } else {
-                console.error('轮询失败:', response.status);
-              }
-            } catch (error) {
-              console.error('轮询错误:', error);
+            updateRoomStatus('online');
+            
+            console.log('初始化轮询同步，房间:', roomId);
+            
+            // 清除旧的轮询
+            if (syncInterval) {
+                clearInterval(syncInterval);
             }
-          }, 2000); // 每2秒轮询一次
-          
-          // 更新同步状态显示
-          document.getElementById('sync-status').classList.remove('hidden');
+            
+            // 设置轮询间隔
+            syncInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${ESA_COLLAB_API}?action=get_updates&roomId=${roomId}&userId=${userId}&lastSync=${lastSyncTime}`);
+                    
+                    if (response.ok) {
+                        const data = await response.json();
+                        console.log('轮询更新:', data.updates?.length || 0, '个操作');
+                        
+                        lastSyncTime = Date.now();
+                        
+                        if (data.updates && data.updates.length > 0) {
+                            data.updates.forEach(update => {
+                                console.log('处理远程操作:', update.type, '来自:', update.userName);
+                                applyRemoteOperation(update);
+                            });
+                        }
+                        
+                        if (data.users) {
+                            updateUserList(data.users);
+                        }
+                    } else {
+                        console.error('轮询失败:', response.status);
+                    }
+                } catch (error) {
+                    console.error('轮询错误:', error);
+                }
+            }, 2000); // 每2秒轮询一次
+            
+            // 更新同步状态显示
+            document.getElementById('sync-status').classList.remove('hidden');
         }
         
-                // 广播节点操作
+        // 广播节点操作
         function broadcastNodeOperation(operation) {
-          if (!collaborationRoom) return;
-          
-          const data = {
-            ...operation,
-            userId: userId,
-            userName: userName,
-            timestamp: Date.now(),
-            color: getUserColor(userId)
-          };
-          
-          console.log('广播操作:', operation.type, data);
-          
-          // 发送操作到API
-          sendOperationToAPI(operation);
-        }
-
-                // 发送操作到API
-        async function sendOperationToAPI(operation) {
-          if (!collaborationRoom) return;
-          
-          try {
-            const response = await fetch(ESA_COLLAB_API, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'send_operation',
-                roomId: collaborationRoom.id,
-                userId: userId,
-                operation: operation
-              })
-            });
+            if (!collaborationRoom) return;
             
-            if (!response.ok) {
-              console.error('发送操作失败:', await response.text());
-            }
-          } catch (error) {
-            console.error('发送操作失败:', error);
-          }
+            const data = {
+                ...operation,
+                userId: userId,
+                userName: userName,
+                timestamp: Date.now(),
+                color: getUserColor(userId)
+            };
+            
+            console.log('广播操作:', operation.type, data);
+            
+            // 发送操作到API
+            sendOperationToAPI(operation);
         }
-
-                // 应用远程操作
-        function applyRemoteOperation(data) {
-          console.log('应用远程操作:', data.type, data);
-          
-          switch (data.type) {
-            case 'add_node':
-              // 创建节点
-              const node = { 
-                id: data.node.id, 
-                parentId: data.node.parentId, 
-                role: data.node.role, 
-                content: data.node.content, 
-                children: [], 
-                timestamp: data.node.timestamp || Date.now(),
-                systemPrompt: data.node.systemPrompt || currentSystemPrompt,
-                region: data.node.region || currentRegion 
-              };
-              
-              console.log('添加节点:', node.id, '父节点:', node.parentId);
-              
-              // 添加到nodeMap
-              nodeMap[node.id] = node;
-              
-              // 建立父子关系
-              if (node.parentId && nodeMap[node.parentId]) {
-                if (!nodeMap[node.parentId].children) {
-                  nodeMap[node.parentId].children = [];
-                }
-                if (!nodeMap[node.parentId].children.includes(node.id)) {
-                  nodeMap[node.parentId].children.push(node.id);
-                }
-              } else if (!rootId) {
-                // 如果没有根节点，设置当前节点为根节点
-                rootId = node.id;
-                console.log('设置根节点:', rootId);
-              }
-              break;
-              
-            case 'update_node':
-              // 更新节点内容
-              if (nodeMap[data.nodeId]) {
-                console.log('更新节点:', data.nodeId, '新内容:', data.content?.substring(0, 50) + '...');
-                nodeMap[data.nodeId].content = data.content;
-                if (data.systemPrompt !== undefined) {
-                  nodeMap[data.nodeId].systemPrompt = data.systemPrompt;
-                }
-              } else {
-                console.warn('更新节点失败: 节点不存在', data.nodeId);
-              }
-              break;
-              
-            case 'set_active_node':
-              // 设置活动节点
-              console.log('设置活动节点:', data.nodeId);
-              activeNodeId = data.nodeId;
-              break;
-              
-            case 'update_system_prompt':
-              // 更新系统提示词
-              console.log('更新系统提示词:', data.prompt);
-              currentSystemPrompt = data.prompt;
-              break;
-              
-            case 'add_complete_node':
-              // 添加完整节点（包含完整的对话路径）
-              console.log('添加完整节点树');
-              if (data.nodes) {
-                // 批量添加节点
-                data.nodes.forEach(nodeData => {
-                  if (!nodeMap[nodeData.id]) {
-                    nodeMap[nodeData.id] = {
-                      ...nodeData,
-                      children: nodeData.children || []
-                    };
-                  }
+        
+        // 发送操作到API
+        async function sendOperationToAPI(operation) {
+            if (!collaborationRoom) return;
+            
+            try {
+                const response = await fetch(ESA_COLLAB_API, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        action: 'send_operation',
+                        roomId: collaborationRoom.id,
+                        userId: userId,
+                        operation: operation
+                    })
                 });
                 
-                // 更新根节点和活动节点
-                if (data.rootId) rootId = data.rootId;
-                if (data.activeNodeId) activeNodeId = data.activeNodeId;
-              }
-              break;
-              
-            default:
-              console.warn('未知操作类型:', data.type);
-          }
-          
-          // 重新渲染
-          console.log('重新渲染... 节点数量:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
-          
-          // 保存当前状态
-          saveCurrentChat();
-          
-          // 重新渲染视图
-          setTimeout(() => {
-            renderStreamView();
-            if (cy) {
-              setTimeout(() => initTree(), 100);
+                if (!response.ok) {
+                    console.error('发送操作失败:', await response.text());
+                }
+            } catch (error) {
+                console.error('发送操作失败:', error);
             }
-          }, 50);
-          
-          // 显示操作通知
-          if (data.userId !== userId && data.userName) {
-            showNotification(`${data.userName} 更新了思维树`, 'info');
-          }
         }
-      
+        
+        // 应用远程操作
+        function applyRemoteOperation(data) {
+            console.log('应用远程操作:', data.type, data);
+            
+            // 如果是自己发送的操作，不处理
+            if (data.userId === userId) {
+                console.log('忽略自己的操作');
+                return;
+            }
+            
+            switch (data.type) {
+                case 'add_node':
+                    // 创建节点
+                    const node = { 
+                        id: data.node.id, 
+                        parentId: data.node.parentId, 
+                        role: data.node.role, 
+                        content: data.node.content, 
+                        children: [], 
+                        timestamp: data.node.timestamp || Date.now(),
+                        systemPrompt: data.node.systemPrompt || currentSystemPrompt,
+                        region: data.node.region || currentRegion 
+                    };
+                    
+                    console.log('添加节点:', node.id, '父节点:', node.parentId, '角色:', node.role);
+                    
+                    // 添加到nodeMap
+                    nodeMap[node.id] = node;
+                    
+                    // 建立父子关系
+                    if (node.parentId && nodeMap[node.parentId]) {
+                        if (!nodeMap[node.parentId].children) {
+                            nodeMap[node.parentId].children = [];
+                        }
+                        if (!nodeMap[node.parentId].children.includes(node.id)) {
+                            nodeMap[node.parentId].children.push(node.id);
+                        }
+                    } else if (!rootId) {
+                        // 如果没有根节点，设置当前节点为根节点
+                        rootId = node.id;
+                        console.log('设置根节点:', rootId);
+                    }
+                    break;
+                    
+                case 'update_node':
+                    // 更新节点内容
+                    if (nodeMap[data.nodeId]) {
+                        console.log('更新节点:', data.nodeId, '新内容:', data.content?.substring(0, 50) + '...');
+                        nodeMap[data.nodeId].content = data.content;
+                        if (data.systemPrompt !== undefined) {
+                            nodeMap[data.nodeId].systemPrompt = data.systemPrompt;
+                        }
+                    } else {
+                        console.warn('更新节点失败: 节点不存在', data.nodeId);
+                    }
+                    break;
+                    
+                case 'set_active_node':
+                    // 设置活动节点
+                    console.log('设置活动节点:', data.nodeId);
+                    activeNodeId = data.nodeId;
+                    break;
+                    
+                case 'update_system_prompt':
+                    // 更新系统提示词
+                    console.log('更新系统提示词:', data.prompt);
+                    currentSystemPrompt = data.prompt;
+                    break;
+                    
+                default:
+                    console.warn('未知操作类型:', data.type);
+            }
             
             // 重新渲染
-            renderStreamView();
-            if (cy) {
-                setTimeout(() => initTree(), 100);
-            }
+            console.log('重新渲染... 节点数量:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
+            
+            // 保存当前状态
+            saveCurrentChat();
+            
+            // 重新渲染视图
+            setTimeout(() => {
+                renderStreamView();
+                if (cy) {
+                    setTimeout(() => initTree(), 100);
+                }
+            }, 50);
             
             // 显示操作通知
-            if (data.userId !== userId) {
+            if (data.userId !== userId && data.userName) {
                 showNotification(`${data.userName} 更新了思维树`, 'info');
             }
         }
         
-                // 加载房间快照
+        // 加载房间快照
         function loadRoomSnapshot(snapshot) {
-          if (!snapshot) return;
-          
-          console.log('加载房间快照:', snapshot);
-          
-          // 清空当前状态
-          nodeMap = {};
-          rootId = null;
-          activeNodeId = null;
-          
-          // 加载快照数据
-          if (snapshot.nodeMap) {
-            nodeMap = snapshot.nodeMap;
-          }
-          
-          if (snapshot.rootId) {
-            rootId = snapshot.rootId;
-          }
-          
-          if (snapshot.activeNodeId) {
-            activeNodeId = snapshot.activeNodeId;
-          }
-          
-          if (snapshot.systemPrompt) {
-            currentSystemPrompt = snapshot.systemPrompt;
-          }
-          
-          if (snapshot.region) {
-            currentRegion = snapshot.region;
-          }
-          
-          console.log('快照加载完成，节点数:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
-          
-          // 更新UI
-          setTimeout(() => {
-            renderStreamView();
-            updateRegionDisplay();
-          }, 100);
-          
-          // 保存到当前对话
-          saveCurrentChat();
+            if (!snapshot) return;
+            
+            console.log('加载房间快照:', snapshot);
+            
+            // 清空当前状态
+            nodeMap = {};
+            rootId = null;
+            activeNodeId = null;
+            
+            // 加载快照数据
+            if (snapshot.nodeMap) {
+                nodeMap = snapshot.nodeMap;
+            }
+            
+            if (snapshot.rootId) {
+                rootId = snapshot.rootId;
+            }
+            
+            if (snapshot.activeNodeId) {
+                activeNodeId = snapshot.activeNodeId;
+            }
+            
+            if (snapshot.systemPrompt) {
+                currentSystemPrompt = snapshot.systemPrompt;
+            }
+            
+            if (snapshot.region) {
+                currentRegion = snapshot.region;
+            }
+            
+            console.log('快照加载完成，节点数:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
+            
+            // 更新UI
+            setTimeout(() => {
+                renderStreamView();
+                updateRegionDisplay();
+            }, 100);
+            
+            // 保存到当前对话
+            saveCurrentChat();
         }
         
-                // 获取当前快照
+        // 获取当前快照
         function getCurrentSnapshot() {
-          const snapshot = {
-            nodeMap: { ...nodeMap }, // 深拷贝节点映射
-            rootId: rootId,
-            activeNodeId: activeNodeId,
-            systemPrompt: currentSystemPrompt,
-            region: currentRegion,
-            timestamp: Date.now(),
-            version: 1
-          };
-          
-          // 清理节点中的循环引用
-          Object.keys(snapshot.nodeMap).forEach(key => {
-            snapshot.nodeMap[key] = { ...snapshot.nodeMap[key] };
-          });
-          
-          console.log('创建快照，节点数:', Object.keys(snapshot.nodeMap).length);
-          
-          return snapshot;
+            const snapshot = {
+                nodeMap: { ...nodeMap }, // 深拷贝节点映射
+                rootId: rootId,
+                activeNodeId: activeNodeId,
+                systemPrompt: currentSystemPrompt,
+                region: currentRegion,
+                timestamp: Date.now(),
+                version: 1
+            };
+            
+            // 清理节点中的循环引用
+            Object.keys(snapshot.nodeMap).forEach(key => {
+                snapshot.nodeMap[key] = { ...snapshot.nodeMap[key] };
+            });
+            
+            console.log('创建快照，节点数:', Object.keys(snapshot.nodeMap).length);
+            
+            return snapshot;
         }
         
         // 更新用户列表
@@ -1171,49 +788,65 @@
             }
         }
 
-                // ================= 节点管理 =================
+        // ================= 节点管理 =================
         function createNode(role, content, parentId = null, systemPromptSnapshot = null) {
-          const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
-          const node = { 
-            id, parentId, role, content, 
-            children: [], 
-            timestamp: Date.now(),
-            systemPrompt: systemPromptSnapshot || currentSystemPrompt,
-            region: currentRegion 
-          };
-          nodeMap[id] = node;
-          
-          // 建立父子关系
-          if (parentId && nodeMap[parentId]) {
-            if (!nodeMap[parentId].children) {
-              nodeMap[parentId].children = [];
+            const id = Date.now().toString(36) + Math.random().toString(36).substr(2);
+            const node = { 
+                id, parentId, role, content, 
+                children: [], 
+                timestamp: Date.now(),
+                systemPrompt: systemPromptSnapshot || currentSystemPrompt,
+                region: currentRegion 
+            };
+            nodeMap[id] = node;
+            
+            // 建立父子关系
+            if (parentId && nodeMap[parentId]) {
+                if (!nodeMap[parentId].children) {
+                    nodeMap[parentId].children = [];
+                }
+                nodeMap[parentId].children.push(id);
+            } else if (!rootId) {
+                // 如果没有根节点，设置当前节点为根节点
+                rootId = id;
             }
-            nodeMap[parentId].children.push(id);
-          } else if (!rootId) {
-            // 如果没有根节点，设置当前节点为根节点
-            rootId = id;
-          }
-          
-          // 广播节点添加操作
-          if (collaborationRoom) {
-            broadcastNodeOperation({
-              type: 'add_node',
-              node: node
-            });
-          }
-          
-          console.log('创建节点:', role, id, '父节点:', parentId, '内容长度:', content?.length);
-          
-          return node;
+            
+            // 广播节点添加操作
+            if (collaborationRoom) {
+                broadcastNodeOperation({
+                    type: 'add_node',
+                    node: node
+                });
+            }
+            
+            console.log('创建节点:', role, id, '父节点:', parentId, '内容长度:', content?.length);
+            
+            return node;
         }
 
         // ================= 视图逻辑 =================
         function renderStreamView() {
             const container = document.getElementById('chat-container');
             container.innerHTML = ''; 
-            if (!activeNodeId) return;
+            
+            // 如果没有活动节点且没有根节点，显示空状态
+            if (!activeNodeId && !rootId) {
+                container.innerHTML = `<div class="text-center text-gray-400 mt-20"><i class="fa-solid fa-seedling text-4xl mb-4 text-green-300"></i><br>开始一颗新的思维树</div>`;
+                return;
+            }
+            
+            // 如果没有活动节点但有根节点，使用根节点
+            if (!activeNodeId && rootId) {
+                activeNodeId = findDeepestLatestDescendant(rootId);
+            }
 
             const path = getLineage(activeNodeId);
+            
+            if (path.length === 0) {
+                console.warn('没有找到节点路径，活动节点:', activeNodeId);
+                return;
+            }
+            
             const lastNode = path[path.length - 1];
             if (lastNode && lastNode.systemPrompt) currentSystemPrompt = lastNode.systemPrompt;
             if (lastNode && lastNode.region) currentRegion = lastNode.region; 
@@ -1227,14 +860,16 @@
                 let branchNav = '';
                 if (node.parentId) {
                     const parent = nodeMap[node.parentId];
-                    if (parent && parent.children.length > 1) {
+                    if (parent && parent.children && parent.children.length > 1) {
                         const idx = parent.children.indexOf(node.id);
-                        branchNav = `
-                            <div class="flex items-center gap-2 text-xs text-gray-400 mb-1 select-none">
-                                <button onclick="switchSibling('${parent.id}', -1, '${node.id}')" class="hover:text-blue-600 p-1"><i class="fa-solid fa-chevron-left"></i></button>
-                                <span>分支 ${idx + 1}/${parent.children.length}</span>
-                                <button onclick="switchSibling('${parent.id}', 1, '${node.id}')" class="hover:text-blue-600 p-1"><i class="fa-solid fa-chevron-right"></i></button>
-                            </div>`;
+                        if (idx !== -1) {
+                            branchNav = `
+                                <div class="flex items-center gap-2 text-xs text-gray-400 mb-1 select-none">
+                                    <button onclick="switchSibling('${parent.id}', -1, '${node.id}')" class="hover:text-blue-600 p-1"><i class="fa-solid fa-chevron-left"></i></button>
+                                    <span>分支 ${idx + 1}/${parent.children.length}</span>
+                                    <button onclick="switchSibling('${parent.id}', 1, '${node.id}')" class="hover:text-blue-600 p-1"><i class="fa-solid fa-chevron-right"></i></button>
+                                </div>`;
+                        }
                     }
                 }
 
@@ -1277,7 +912,11 @@
         
         function switchSibling(parentId, direction, currentNodeId) {
             const parent = nodeMap[parentId];
+            if (!parent || !parent.children) return;
+            
             const idx = parent.children.indexOf(currentNodeId);
+            if (idx === -1) return;
+            
             const nextIdx = idx + direction;
             if (nextIdx >= 0 && nextIdx < parent.children.length) {
                 activeNodeId = findDeepestLatestDescendant(parent.children[nextIdx]);
@@ -1296,8 +935,13 @@
         
         function findDeepestLatestDescendant(nodeId) {
             let curr = nodeMap[nodeId];
+            if (!curr) return nodeId;
+            
             while(curr.children && curr.children.length > 0) {
-                curr = nodeMap[curr.children[curr.children.length - 1]];
+                const lastChildId = curr.children[curr.children.length - 1];
+                const child = nodeMap[lastChildId];
+                if (!child) break;
+                curr = child;
             }
             return curr.id;
         }
@@ -1317,8 +961,13 @@
         async function sendMessage() {
             const inputEl = document.getElementById('user-input');
             let content = inputEl.value.trim();
-            if (!content && !currentFileContent) return;
-            inputEl.value = ''; inputEl.style.height = 'auto';
+            if (!content && !currentFileContent) {
+                showNotification('请输入内容', 'info');
+                return;
+            }
+            
+            inputEl.value = ''; 
+            inputEl.style.height = 'auto';
 
             let displayContent = content; 
             let finalPrompt = content;
@@ -1355,97 +1004,76 @@
             const container = document.getElementById('chat-container');
             const loadingDiv = document.createElement('div');
             loadingDiv.className = "flex flex-col items-start animate-slide-up mt-4";
-            loadingDiv.innerHTML = `<div class="bg-white border border-gray-100 px-5 py-3 rounded-2xl rounded-tl-none shadow-sm"><div class="flex gap-1 h-5 items-center"><div class="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div><div class="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div></div></div>`;
+            loadingDiv.innerHTML = `<div class="bg-white border border-gray-100 px-5 py-3 rounded-2xl rounded-tl-none shadow-sm"><div class="flex gap-1 h-5 items-center"><div class="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div><div class="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div><div class="typing-dot w-2 h-2 bg-gray-400 rounded-full"></div></div></div>`;
             container.appendChild(loadingDiv);
             container.scrollTop = container.scrollHeight;
 
-                        // 在sendMessage函数中，修改AI调用成功后的部分
             try {
-              const aiNode = createNode('assistant', '', parentId);
-              activeNodeId = aiNode.id;
-            
-              // 🔥 直接调用DeepSeek API（前端直接调用，绕过ESA限制）
-              const response = await fetch(DEEPSEEK_API_URL, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-                  "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ 
-                  model: "deepseek-v3", 
-                  messages: messages,
-                  stream: false, // 使用非流式，避免长时间连接
-                  temperature: 0.7,
-                  max_tokens: 2000
-                })
-              });
-            
-              if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`API Error: ${response.status} - ${errorText}`);
-              }
-              
-              const data = await response.json();
-              
-              loadingDiv.remove();
-              
-              // 更新AI节点内容
-              if (data.choices && data.choices[0] && data.choices[0].message) {
-                aiNode.content = data.choices[0].message.content;
-                
-                console.log('AI回复完成，广播更新');
-                
-                // 广播AI节点更新
-                if (collaborationRoom) {
-                  // 先广播节点添加
-                  broadcastNodeOperation({
-                    type: 'add_node',
-                    node: aiNode
-                  });
-                  
-                  // 然后广播节点内容更新
-                  broadcastNodeOperation({
-                    type: 'update_node',
-                    nodeId: aiNode.id,
-                    content: aiNode.content,
-                    systemPrompt: currentSystemPrompt
-                  });
-                  
-                  // 最后广播活动节点变更
-                  broadcastNodeOperation({
-                    type: 'set_active_node',
-                    nodeId: activeNodeId
-                  });
-                }
-              } else {
-                throw new Error('API返回格式错误');
-              }
-              
-              // 重新渲染显示AI回复
-              renderStreamView();
-              saveCurrentChat();
-              
-            } catch (error) {
-              console.error('发送消息失败:', error);
-              loadingDiv.innerHTML = `<div class="text-red-500 px-4 py-2 bg-red-50 rounded border border-red-200">
-                <div class="font-semibold">AI请求失败</div>
-                <div class="text-sm">${error.message}</div>
-                <div class="text-xs mt-1">请检查API Key或网络连接</div>
-              </div>`;
-              
-              // 创建错误节点
-              const aiNode = createNode('assistant', 'AI服务暂时不可用，请稍后重试。', parentId);
-              activeNodeId = aiNode.id;
-              
-              if (collaborationRoom) {
-                broadcastNodeOperation({
-                  type: 'add_node',
-                  node: aiNode
+                const aiNode = createNode('assistant', '', parentId);
+                activeNodeId = aiNode.id;
+
+                // 🔥 直接调用DeepSeek API
+                const response = await fetch(DEEPSEEK_API_URL, {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ 
+                        model: "deepseek-v3", 
+                        messages: messages,
+                        stream: false, // 使用非流式
+                        temperature: 0.7,
+                        max_tokens: 2000
+                    })
                 });
-              }
-              
-              renderStreamView();
-              saveCurrentChat();
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`API Error: ${response.status} - ${errorText}`);
+                }
+                
+                const data = await response.json();
+                
+                loadingDiv.remove();
+                renderStreamView(); 
+                
+                // 更新AI节点内容
+                if (data.choices && data.choices[0] && data.choices[0].message) {
+                    aiNode.content = data.choices[0].message.content;
+                    
+                    console.log('AI回复完成，广播更新');
+                    
+                    // 广播节点内容更新
+                    if (collaborationRoom) {
+                        broadcastNodeOperation({
+                            type: 'update_node',
+                            nodeId: aiNode.id,
+                            content: aiNode.content,
+                            systemPrompt: currentSystemPrompt
+                        });
+                    }
+                } else {
+                    throw new Error('API返回格式错误');
+                }
+                
+                // 重新渲染显示AI回复
+                renderStreamView();
+                saveCurrentChat();
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                loadingDiv.innerHTML = `<div class="text-red-500 px-4 py-2 bg-red-50 rounded border border-red-200">
+                    <div class="font-semibold">AI请求失败</div>
+                    <div class="text-sm">${error.message}</div>
+                    <div class="text-xs mt-1">请检查API Key或网络连接</div>
+                </div>`;
+                
+                // 创建错误节点
+                const aiNode = createNode('assistant', 'AI服务暂时不可用，请稍后重试。', parentId);
+                activeNodeId = aiNode.id;
+                
+                renderStreamView();
+                saveCurrentChat();
             }
         }
 
@@ -1457,7 +1085,7 @@
             const treeView = document.getElementById('tree-view');
             const btnText = document.getElementById('view-toggle-text');
 
-            if (streamView.style.opacity === '0') {
+            if (streamView.style.opacity === '0' || streamView.style.opacity === '') {
                 streamView.style.opacity = '1';
                 streamView.style.pointerEvents = 'auto';
                 treeView.style.opacity = '0';
@@ -1474,23 +1102,29 @@
         }
 
         function initTree() {
-            if (!rootId) return;
+            if (!rootId || Object.keys(nodeMap).length === 0) {
+                console.log('没有节点数据，不初始化树状图');
+                return;
+            }
+            
             if (cy) cy.destroy();
 
             const elements = [];
             Object.values(nodeMap).forEach(node => {
-                const label = node.role === 'user' ? '👤 ' + node.content.substring(0, 10) : '🤖 ' + node.content.substring(0, 10);
+                const label = node.role === 'user' ? '👤 ' + (node.content?.substring(0, 10) || '') : '🤖 ' + (node.content?.substring(0, 10) || '');
                 const safeLabel = label.replace(/\n/g, ' ');
                 elements.push({
                     data: { 
                         id: node.id, 
-                        label: safeLabel + (node.content.length > 10 ? '...' : ''),
+                        label: safeLabel + ((node.content?.length || 0) > 10 ? '...' : ''),
                         fullContent: node.content,
                         role: node.role,
                         region: node.region || 'bj'
                     }
                 });
-                if (node.parentId) elements.push({ data: { source: node.parentId, target: node.id } });
+                if (node.parentId && nodeMap[node.parentId]) {
+                    elements.push({ data: { source: node.parentId, target: node.id } });
+                }
             });
 
             cy = cytoscape({
@@ -1517,7 +1151,7 @@
                         style: { 'width': 2, 'line-color': '#cbd5e1', 'target-arrow-color': '#cbd5e1', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' }
                     },
                     {
-                        selector: `#${activeNodeId}`,
+                        selector: activeNodeId ? `#${activeNodeId}` : '',
                         style: { 'border-color': '#10b981', 'border-width': 3, 'background-color': '#d1fae5', 'color': '#065f46' }
                     }
                 ],
@@ -1605,13 +1239,13 @@
             const chatData = { 
                 rootId, 
                 activeNodeId, 
-                nodeMap,
+                nodeMap: {...nodeMap},
                 systemPrompt: currentSystemPrompt
             };
             
             localStorage.setItem(`esa_chat_${currentChatId}`, JSON.stringify(chatData));
             const rootNode = nodeMap[rootId];
-            const title = rootNode ? rootNode.content.substring(0, 10) + "..." : "新对话";
+            const title = rootNode ? (rootNode.content?.substring(0, 10) || "新对话") + "..." : "新对话";
             const existingIndex = chatHistory.findIndex(c => c.id === currentChatId);
             if (existingIndex >= 0) {
                 chatHistory[existingIndex].title = title;
@@ -1702,6 +1336,35 @@
             chatHistory = chatHistory.filter(c => c.id !== chatId);
             localStorage.setItem('esa_mindforest_history', JSON.stringify(chatHistory));
             if (currentChatId === chatId) createNewChat(); else loadSidebar();
+        }
+        
+        // ================= 调试功能 =================
+        function debugState() {
+            console.log('=== 调试状态 ===');
+            console.log('协作房间:', collaborationRoom);
+            console.log('节点数量:', Object.keys(nodeMap).length);
+            console.log('根节点:', rootId);
+            console.log('活动节点:', activeNodeId);
+            console.log('用户ID:', userId);
+            console.log('nodeMap:', nodeMap);
+            
+            // 显示节点树
+            function printNodeTree(nodeId, depth = 0) {
+                const node = nodeMap[nodeId];
+                if (!node) return;
+                
+                const indent = '  '.repeat(depth);
+                console.log(`${indent}${node.role === 'user' ? '👤' : '🤖'} ${node.id}: ${node.content?.substring(0, 30)}...`);
+                
+                if (node.children && node.children.length > 0) {
+                    node.children.forEach(childId => printNodeTree(childId, depth + 1));
+                }
+            }
+            
+            if (rootId) {
+                console.log('节点树:');
+                printNodeTree(rootId);
+            }
         }
     </script>
 </body>
