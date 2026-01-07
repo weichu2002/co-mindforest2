@@ -195,6 +195,10 @@
                     <i class="fa-solid fa-project-diagram"></i>
                     <span id="view-toggle-text">切换思维树视图</span>
                 </button>
+                <button onclick="toggleOtherBranches()" class="hidden flex items-center gap-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md transition-colors font-medium text-sm border border-slate-300" id="toggle-branches-btn">
+                    <i class="fa-solid fa-code-branch"></i>
+                    <span>显示其他分支</span>
+                </button>
             </div>
         </header>
 
@@ -264,6 +268,7 @@
         </div>
     </div>
 
+    <!-- 节点详情模态框 -->
     <div id="node-detail-modal" class="fixed inset-0 bg-black/40 z-50 hidden flex items-center justify-center backdrop-blur-sm" onclick="closeNodeDetail()">
         <div class="bg-white rounded-xl shadow-2xl w-[800px] max-w-[95%] max-h-[85vh] flex flex-col animate-slide-up" onclick="event.stopPropagation()">
             <div class="p-4 border-b flex justify-between items-center bg-gray-50 rounded-t-xl select-none">
@@ -280,6 +285,7 @@
         </div>
     </div>
 
+    <!-- 创建房间模态框 -->
     <div id="create-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
         <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
             <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-users text-purple-600"></i> 创建协作房间</h3>
@@ -300,6 +306,7 @@
         </div>
     </div>
 
+    <!-- 加入房间模态框 -->
     <div id="join-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
         <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
             <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-door-open text-green-600"></i> 加入协作房间</h3>
@@ -321,6 +328,7 @@
         </div>
     </div>
 
+    <!-- 房间分享模态框 -->
     <div id="share-room-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center">
         <div class="bg-white rounded-xl shadow-2xl w-96 p-6 animate-slide-up">
             <h3 class="text-lg font-bold mb-4 flex items-center gap-2"><i class="fa-solid fa-share-nodes text-blue-600"></i> 分享协作房间</h3>
@@ -365,7 +373,7 @@
         const DEEPSEEK_API_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions";
         
         // ESA协作API端点
-        const ESA_COLLAB_API = '/api/collab'; // 根据esa.config.json配置
+        const ESA_COLLAB_API = '/api/collab';
 
         // ================= 状态 =================
         let nodeMap = {}; 
@@ -386,6 +394,8 @@
         let userName = "用户" + Math.floor(Math.random() * 1000);
         let syncInterval = null;
         let lastSyncTime = 0;
+        let otherUserBranches = {};
+        let showOtherBranches = false;
 
         // ================= 工具函数 =================
         function generateUserId() {
@@ -438,8 +448,6 @@
             if (savedName) {
                 userName = savedName;
             }
-            
-            console.log('MindForest 初始化完成，用户ID:', userId);
         });
 
         // ================= 协作功能 =================
@@ -508,10 +516,9 @@
                     }, 300);
                     
                     showNotification(`协作房间 "${roomName}" 创建成功！`, 'success');
-                    console.log('房间创建成功，ID:', roomId);
                 } else {
-                    const error = await response.text();
-                    throw new Error(error);
+                    const errorText = await response.text();
+                    throw new Error('创建房间失败: ' + errorText);
                 }
             } catch (error) {
                 console.error('创建房间错误:', error);
@@ -543,16 +550,6 @@
             localStorage.setItem('esa_user_name', userName);
             
             try {
-                // 先获取房间信息
-                console.log('尝试加入房间:', roomId);
-                const infoResponse = await fetch(`${ESA_COLLAB_API}?action=get_room_info&roomId=${roomId}`);
-                if (!infoResponse.ok) {
-                    throw new Error('房间不存在或无法访问');
-                }
-                
-                const infoData = await infoResponse.json();
-                console.log('房间信息:', infoData);
-                
                 // 调用ESA API加入房间
                 const response = await fetch(ESA_COLLAB_API, {
                     method: 'POST',
@@ -578,14 +575,22 @@
                     
                     collaborationRoom = data.room;
                     
-                    console.log('加入房间成功，房间数据:', collaborationRoom);
-                    
-                    // 加载思维树快照
+                    // 加载思维树快照（协作者复制主持人的思维树）
                     if (data.snapshot) {
-                        console.log('加载房间快照...');
-                        loadRoomSnapshot(data.snapshot);
-                    } else {
-                        console.log('房间没有快照数据');
+                        // 清空当前状态
+                        nodeMap = {};
+                        rootId = null;
+                        activeNodeId = null;
+                        
+                        // 复制主持人的思维树
+                        const hostSnapshot = data.snapshot;
+                        nodeMap = JSON.parse(JSON.stringify(hostSnapshot.nodeMap || {}));
+                        rootId = hostSnapshot.rootId;
+                        activeNodeId = hostSnapshot.activeNodeId;
+                        currentSystemPrompt = hostSnapshot.systemPrompt || DEFAULT_SYSTEM_PROMPT;
+                        currentRegion = hostSnapshot.region || 'bj';
+                        
+                        console.log('协作者复制了主持人的思维树，节点数:', Object.keys(nodeMap).length);
                     }
                     
                     // 初始化轮询同步
@@ -597,10 +602,14 @@
                     // 关闭模态框
                     closeJoinRoomModal();
                     
-                    showNotification(`已加入房间 "${collaborationRoom.name}"`, 'success');
+                    showNotification(`已加入房间 "${collaborationRoom.name}"，复制了主持人的思维树`, 'success');
+                    
+                    // 重新渲染
+                    renderStreamView();
+                    saveCurrentChat();
                 } else {
-                    const error = await response.text();
-                    throw new Error(error);
+                    const errorText = await response.text();
+                    throw new Error('加入房间失败: ' + errorText);
                 }
             } catch (error) {
                 console.error('加入房间错误:', error);
@@ -621,233 +630,65 @@
                     
                     if (response.ok) {
                         const data = await response.json();
-                        console.log('轮询更新:', data.updates?.length || 0, '个操作');
                         
                         lastSyncTime = Date.now();
                         
                         if (data.updates && data.updates.length > 0) {
+                            // 显示操作通知
                             data.updates.forEach(update => {
-                                console.log('处理远程操作:', update.type, '来自:', update.userName);
-                                applyRemoteOperation(update);
+                                if (update.userId !== userId && update.userName) {
+                                    showNotification(`${update.userName} 更新了思维树`, 'info');
+                                }
                             });
+                        }
+                        
+                        // 更新其他用户的分支状态
+                        if (data.userBranches) {
+                            otherUserBranches = data.userBranches;
+                            updateOtherBranchesStatus();
                         }
                         
                         if (data.users) {
                             updateUserList(data.users);
                         }
-                    } else {
-                        console.error('轮询失败:', response.status);
                     }
                 } catch (error) {
                     console.error('轮询错误:', error);
                 }
-            }, 2000); // 每2秒轮询一次
+            }, 3000); // 每3秒轮询一次
             
             // 更新同步状态显示
             document.getElementById('sync-status').classList.remove('hidden');
         }
         
-        // 广播节点操作
-        function broadcastNodeOperation(operation) {
+        // 自动保存当前分支到服务器
+        async function saveCurrentBranch() {
             if (!collaborationRoom) return;
             
-            const data = {
-                ...operation,
-                userId: userId,
-                userName: userName,
-                timestamp: Date.now(),
-                color: getUserColor(userId)
-            };
-            
-            console.log('广播操作:', operation.type, data);
-            
-            // 使用HTTP API发送操作
-            sendOperationToAPI(operation);
-        }
-        
-        // 发送操作到API
-        async function sendOperationToAPI(operation) {
-            if (!collaborationRoom) return;
+            const snapshot = getCurrentSnapshot();
             
             try {
                 const response = await fetch(ESA_COLLAB_API, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        action: 'send_operation',
+                        action: 'update_user_branch',
                         roomId: collaborationRoom.id,
                         userId: userId,
-                        operation: operation
+                        snapshot: snapshot,
+                        operation: {
+                            type: 'branch_update',
+                            description: '更新了思维树分支'
+                        }
                     })
                 });
                 
                 if (!response.ok) {
-                    console.error('发送操作失败:', await response.text());
+                    console.error('保存分支失败:', await response.text());
                 }
             } catch (error) {
-                console.error('发送操作失败:', error);
+                console.error('保存分支错误:', error);
             }
-        }
-        
-        // 应用远程操作
-        function applyRemoteOperation(data) {
-            console.log('应用远程操作:', data.type, data);
-            
-            switch (data.type) {
-                case 'add_node':
-                    // 创建节点
-                    const node = { 
-                        id: data.node.id, 
-                        parentId: data.node.parentId, 
-                        role: data.node.role, 
-                        content: data.node.content, 
-                        children: data.node.children || [], 
-                        timestamp: data.node.timestamp || Date.now(),
-                        systemPrompt: data.node.systemPrompt || currentSystemPrompt,
-                        region: data.node.region || currentRegion 
-                    };
-                    
-                    console.log('添加节点:', node.id, '父节点:', node.parentId, '角色:', node.role);
-                    
-                    // 添加到nodeMap
-                    nodeMap[node.id] = node;
-                    
-                    // 建立父子关系
-                    if (node.parentId && nodeMap[node.parentId]) {
-                        if (!nodeMap[node.parentId].children) {
-                            nodeMap[node.parentId].children = [];
-                        }
-                        if (!nodeMap[node.parentId].children.includes(node.id)) {
-                            nodeMap[node.parentId].children.push(node.id);
-                        }
-                    } else if (!rootId) {
-                        // 如果没有根节点，设置当前节点为根节点
-                        rootId = node.id;
-                        console.log('设置根节点:', rootId);
-                    }
-                    break;
-                    
-                case 'update_node':
-                    // 更新节点内容
-                    if (nodeMap[data.nodeId]) {
-                        console.log('更新节点:', data.nodeId, '新内容:', data.content?.substring(0, 50) + '...');
-                        nodeMap[data.nodeId].content = data.content;
-                        if (data.systemPrompt !== undefined) {
-                            nodeMap[data.nodeId].systemPrompt = data.systemPrompt;
-                        }
-                    } else {
-                        console.warn('更新节点失败: 节点不存在', data.nodeId);
-                    }
-                    break;
-                    
-                case 'set_active_node':
-                    // 设置活动节点
-                    console.log('设置活动节点:', data.nodeId);
-                    activeNodeId = data.nodeId;
-                    break;
-                    
-                case 'update_system_prompt':
-                    // 更新系统提示词
-                    console.log('更新系统提示词:', data.prompt);
-                    currentSystemPrompt = data.prompt;
-                    break;
-                    
-                default:
-                    console.warn('未知操作类型:', data.type);
-            }
-            
-            // 重新渲染
-            console.log('重新渲染... 节点数量:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
-            
-            // 保存当前状态
-            saveCurrentChat();
-            
-            // 重新渲染视图
-            setTimeout(() => {
-                renderStreamView();
-                if (cy) {
-                    setTimeout(() => initTree(), 100);
-                }
-            }, 50);
-            
-            // 显示操作通知
-            if (data.userId !== userId && data.userName) {
-                showNotification(`${data.userName} 更新了思维树`, 'info');
-            }
-        }
-        
-        // 加载房间快照
-        function loadRoomSnapshot(snapshot) {
-            if (!snapshot) return;
-            
-            console.log('加载房间快照:', snapshot);
-            
-            // 清空当前状态
-            nodeMap = {};
-            rootId = null;
-            activeNodeId = null;
-            
-            // 加载快照数据
-            if (snapshot.nodeMap) {
-                nodeMap = snapshot.nodeMap;
-            }
-            
-            if (snapshot.rootId) {
-                rootId = snapshot.rootId;
-            }
-            
-            if (snapshot.activeNodeId) {
-                activeNodeId = snapshot.activeNodeId;
-            }
-            
-            if (snapshot.systemPrompt) {
-                currentSystemPrompt = snapshot.systemPrompt;
-            }
-            
-            if (snapshot.region) {
-                currentRegion = snapshot.region;
-            }
-            
-            console.log('快照加载完成，节点数:', Object.keys(nodeMap).length, '根节点:', rootId, '活动节点:', activeNodeId);
-            
-            // 更新UI
-            setTimeout(() => {
-                renderStreamView();
-                updateRegionDisplay();
-            }, 100);
-            
-            // 保存到当前对话
-            saveCurrentChat();
-        }
-        
-        // 获取当前快照
-        function getCurrentSnapshot() {
-            const snapshot = {
-                nodeMap: { ...nodeMap }, // 深拷贝节点映射
-                rootId: rootId,
-                activeNodeId: activeNodeId,
-                systemPrompt: currentSystemPrompt,
-                region: currentRegion,
-                timestamp: Date.now(),
-                version: 1
-            };
-            
-            // 清理节点中的循环引用
-            Object.keys(snapshot.nodeMap).forEach(key => {
-                snapshot.nodeMap[key] = { ...snapshot.nodeMap[key] };
-            });
-            
-            console.log('创建快照，节点数:', Object.keys(snapshot.nodeMap).length);
-            
-            return snapshot;
-        }
-        
-        // 更新用户列表
-        function updateUserList(users) {
-            if (!collaborationRoom) return;
-            
-            collaborationRoom.activeUsers = users;
-            updateActiveUsersList();
         }
         
         // 离开房间
@@ -877,6 +718,8 @@
             
             // 重置状态
             collaborationRoom = null;
+            otherUserBranches = {};
+            showOtherBranches = false;
             
             // 更新UI
             updateCollaborationUI();
@@ -892,6 +735,7 @@
             document.getElementById('collaboration-status').classList.toggle('hidden', !isInRoom);
             document.getElementById('collab-badge').classList.toggle('hidden', !isInRoom);
             document.getElementById('sync-status').classList.toggle('hidden', !isInRoom);
+            document.getElementById('toggle-branches-btn').classList.toggle('hidden', !isInRoom);
             
             if (isInRoom) {
                 // 更新房间信息
@@ -913,6 +757,10 @@
             } else {
                 // 隐藏区域标签
                 document.getElementById('region-badge').classList.add('hidden');
+                showOtherBranches = false;
+                document.getElementById('toggle-branches-btn').querySelector('span').textContent = '显示其他分支';
+                document.getElementById('toggle-branches-btn').classList.remove('bg-purple-100', 'text-purple-700', 'border-purple-300');
+                document.getElementById('toggle-branches-btn').classList.add('bg-slate-100');
             }
         }
         
@@ -961,6 +809,83 @@
             
             // 更新顶部徽章
             document.getElementById('collab-user-count').textContent = collaborationRoom.activeUsers.length;
+        }
+        
+        // 更新其他分支状态显示
+        function updateOtherBranchesStatus() {
+            if (!collaborationRoom || Object.keys(otherUserBranches).length === 0) {
+                // 隐藏其他分支状态
+                const existingOtherBranches = document.getElementById('other-branches-status');
+                if (existingOtherBranches) {
+                    existingOtherBranches.remove();
+                }
+                return;
+            }
+            
+            // 在侧边栏添加其他分支信息
+            const statusElement = document.getElementById('collaboration-status');
+            let otherBranchesHTML = '';
+            
+            Object.keys(otherUserBranches).forEach(otherUserId => {
+                const branch = otherUserBranches[otherUserId];
+                if (branch.userName && otherUserId !== userId) {
+                    otherBranchesHTML += `
+                        <div class="text-xs mt-2 p-2 bg-slate-800 rounded">
+                            <div class="flex items-center justify-between">
+                                <span class="text-slate-300">${branch.userName}</span>
+                                <span class="text-slate-400 text-[10px]">${branch.nodeCount}个节点</span>
+                            </div>
+                            <div class="text-[10px] text-slate-500 mt-1">
+                                最后更新: ${new Date(branch.lastUpdated).toLocaleTimeString()}
+                            </div>
+                        </div>
+                    `;
+                }
+            });
+            
+            if (otherBranchesHTML) {
+                // 添加到协作状态区域
+                const existingOtherBranches = document.getElementById('other-branches-status');
+                if (existingOtherBranches) {
+                    existingOtherBranches.innerHTML = `
+                        <div class="text-xs font-semibold text-slate-300 mt-3 mb-1">其他分支:</div>
+                        ${otherBranchesHTML}
+                    `;
+                } else {
+                    const otherBranchesDiv = document.createElement('div');
+                    otherBranchesDiv.id = 'other-branches-status';
+                    otherBranchesDiv.className = 'mt-3';
+                    otherBranchesDiv.innerHTML = `
+                        <div class="text-xs font-semibold text-slate-300 mb-1">其他分支:</div>
+                        ${otherBranchesHTML}
+                    `;
+                    statusElement.appendChild(otherBranchesDiv);
+                }
+            }
+        }
+        
+        // 切换显示其他分支
+        function toggleOtherBranches() {
+            showOtherBranches = !showOtherBranches;
+            const button = document.getElementById('toggle-branches-btn');
+            const buttonText = button.querySelector('span');
+            
+            if (showOtherBranches) {
+                buttonText.textContent = '隐藏其他分支';
+                button.classList.remove('bg-slate-100');
+                button.classList.add('bg-purple-100', 'text-purple-700', 'border-purple-300');
+                showNotification('已开启其他分支显示模式', 'info');
+            } else {
+                buttonText.textContent = '显示其他分支';
+                button.classList.remove('bg-purple-100', 'text-purple-700', 'border-purple-300');
+                button.classList.add('bg-slate-100');
+                showNotification('已关闭其他分支显示模式', 'info');
+            }
+            
+            // 重新初始化思维树
+            if (cy) {
+                initTree();
+            }
         }
         
         // 更新房间状态
@@ -1012,7 +937,7 @@
             const shareUrl = document.getElementById('share-room-url').value;
             navigator.clipboard.writeText(shareUrl)
                 .then(() => showNotification('分享链接已复制到剪贴板', 'success'))
-                .catch(err => console.error('复制失败:', err));
+                    .catch(err => console.error('复制失败:', err));
         }
         
         function showNotification(message, type = 'info') {
@@ -1167,14 +1092,7 @@
                 rootId = id;
             }
             
-            // 广播节点添加操作
-            if (collaborationRoom) {
-                console.log('创建节点并广播:', role, id);
-                broadcastNodeOperation({
-                    type: 'add_node',
-                    node: node
-                });
-            }
+            console.log('创建节点:', role, id, '父节点:', parentId, '内容长度:', content?.length);
             
             return node;
         }
@@ -1183,14 +1101,9 @@
         function renderStreamView() {
             const container = document.getElementById('chat-container');
             container.innerHTML = ''; 
-            if (!activeNodeId) {
-                console.log('没有活动节点，不渲染');
-                return;
-            }
+            if (!activeNodeId) return;
 
             const path = getLineage(activeNodeId);
-            console.log('渲染路径，长度:', path.length, '活动节点:', activeNodeId);
-            
             const lastNode = path[path.length - 1];
             if (lastNode && lastNode.systemPrompt) currentSystemPrompt = lastNode.systemPrompt;
             if (lastNode && lastNode.region) currentRegion = lastNode.region; 
@@ -1204,7 +1117,7 @@
                 let branchNav = '';
                 if (node.parentId) {
                     const parent = nodeMap[node.parentId];
-                    if (parent && parent.children && parent.children.length > 1) {
+                    if (parent && parent.children.length > 1) {
                         const idx = parent.children.indexOf(node.id);
                         branchNav = `
                             <div class="flex items-center gap-2 text-xs text-gray-400 mb-1 select-none">
@@ -1260,14 +1173,6 @@
                 activeNodeId = findDeepestLatestDescendant(parent.children[nextIdx]);
                 renderStreamView();
                 saveCurrentChat();
-                
-                // 广播活动节点变更
-                if (collaborationRoom) {
-                    broadcastNodeOperation({
-                        type: 'set_active_node',
-                        nodeId: activeNodeId
-                    });
-                }
             }
         }
         
@@ -1309,26 +1214,19 @@
             let parentId = branchParentId || activeNodeId;
             let userNode;
 
-            console.log('发送消息，父节点ID:', parentId, '根节点:', rootId);
-
             if (!rootId && !parentId) {
-                // 创建第一个节点
                 userNode = createNode('user', displayContent, null); 
                 activeNodeId = userNode.id;
-                console.log('创建第一个用户节点:', userNode.id);
             } else {
-                // 创建用户节点作为子节点
                 userNode = createNode('user', displayContent, parentId);
                 parentId = userNode.id;
                 activeNodeId = userNode.id;
-                console.log('创建用户节点:', userNode.id, '父节点:', userNode.parentId);
             }
             
             cancelBranching();
             renderStreamView();
             saveCurrentChat();
 
-            // 准备消息历史
             const historyNodes = getLineage(parentId);
             const messages = historyNodes.map(n => ({
                 role: n.role,
@@ -1346,7 +1244,6 @@
             try {
                 const aiNode = createNode('assistant', '', parentId);
                 activeNodeId = aiNode.id;
-                console.log('创建AI节点:', aiNode.id, '等待AI回复...');
 
                 // 🔥 直接调用DeepSeek API（前端直接调用，绕过ESA限制）
                 const response = await fetch(DEEPSEEK_API_URL, {
@@ -1372,29 +1269,13 @@
                 const data = await response.json();
                 
                 loadingDiv.remove();
+                renderStreamView(); 
                 
                 // 更新AI节点内容
                 if (data.choices && data.choices[0] && data.choices[0].message) {
                     aiNode.content = data.choices[0].message.content;
                     
-                    console.log('AI回复完成，广播更新');
-                    
-                    // 广播AI节点内容更新
-                    if (collaborationRoom) {
-                        // 广播节点内容更新
-                        broadcastNodeOperation({
-                            type: 'update_node',
-                            nodeId: aiNode.id,
-                            content: aiNode.content,
-                            systemPrompt: currentSystemPrompt
-                        });
-                        
-                        // 广播活动节点变更
-                        broadcastNodeOperation({
-                            type: 'set_active_node',
-                            nodeId: activeNodeId
-                        });
-                    }
+                    console.log('AI回复完成，保存分支');
                 } else {
                     throw new Error('API返回格式错误');
                 }
@@ -1402,7 +1283,6 @@
                 // 重新渲染显示AI回复
                 renderStreamView();
                 saveCurrentChat();
-                
             } catch (error) {
                 console.error('发送消息失败:', error);
                 loadingDiv.innerHTML = `<div class="text-red-500 px-4 py-2 bg-red-50 rounded border border-red-200">
@@ -1414,7 +1294,6 @@
                 // 创建错误节点
                 const aiNode = createNode('assistant', 'AI服务暂时不可用，请稍后重试。', parentId);
                 activeNodeId = aiNode.id;
-                
                 renderStreamView();
                 saveCurrentChat();
             }
@@ -1445,10 +1324,12 @@
         }
 
         function initTree() {
-            if (!rootId) return;
+            if (!rootId && Object.keys(otherUserBranches).length === 0) return;
             if (cy) cy.destroy();
 
             const elements = [];
+            
+            // 添加当前用户的节点
             Object.values(nodeMap).forEach(node => {
                 const label = node.role === 'user' ? '👤 ' + node.content.substring(0, 10) : '🤖 ' + node.content.substring(0, 10);
                 const safeLabel = label.replace(/\n/g, ' ');
@@ -1458,12 +1339,47 @@
                         label: safeLabel + (node.content.length > 10 ? '...' : ''),
                         fullContent: node.content,
                         role: node.role,
-                        region: node.region || 'bj'
+                        userId: userId,
+                        userName: userName,
+                        isCurrentUser: true
                     }
                 });
-                if (node.parentId) elements.push({ data: { source: node.parentId, target: node.id } });
+                
+                if (node.parentId) {
+                    elements.push({ 
+                        data: { 
+                            source: node.parentId, 
+                            target: node.id,
+                            userId: userId
+                        } 
+                    });
+                }
             });
-
+            
+            // 如果开启显示其他分支，添加其他用户的节点（这里只显示示例，实际需要从服务器获取）
+            if (showOtherBranches && collaborationRoom && Object.keys(otherUserBranches).length > 0) {
+                // 这里可以添加模拟的其他用户节点
+                // 实际应用中应该从服务器获取其他用户的完整分支数据
+                Object.keys(otherUserBranches).forEach(otherUserId => {
+                    if (otherUserId !== userId) {
+                        // 添加示例节点
+                        const otherNodeId = `other_${otherUserId}_node`;
+                        elements.push({
+                            data: { 
+                                id: otherNodeId, 
+                                label: `👤 ${otherUserBranches[otherUserId].userName}的思维树`,
+                                fullContent: `${otherUserBranches[otherUserId].userName}的思维树分支，包含${otherUserBranches[otherUserId].nodeCount}个节点`,
+                                role: 'user',
+                                userId: otherUserId,
+                                userName: otherUserBranches[otherUserId].userName,
+                                isCurrentUser: false
+                            }
+                        });
+                    }
+                });
+            }
+            
+            // 创建Cytoscape实例
             cy = cytoscape({
                 container: document.getElementById('cy'),
                 elements: elements,
@@ -1472,44 +1388,96 @@
                 maxZoom: 1.5,
                 style: [
                     {
-                        selector: 'node',
+                        selector: 'node[isCurrentUser = true]',
                         style: {
                             'background-color': ele => ele.data('role') === 'user' ? '#2563eb' : '#ffffff',
                             'label': 'data(label)',
                             'color': ele => ele.data('role') === 'user' ? '#fff' : '#334155',
-                            'text-valign': 'center', 'text-halign': 'center',
-                            'width': 'label', 'height': 36, 'padding': '12px',
+                            'text-valign': 'center', 
+                            'text-halign': 'center',
+                            'width': 'label', 
+                            'height': 36, 
+                            'padding': '12px',
                             'shape': 'round-rectangle',
-                            'border-width': 1, 'border-color': '#94a3b8', 'font-size': '12px'
+                            'border-width': 2, 
+                            'border-color': '#10b981',
+                            'font-size': '12px'
                         }
                     },
                     {
-                        selector: 'edge',
-                        style: { 'width': 2, 'line-color': '#cbd5e1', 'target-arrow-color': '#cbd5e1', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' }
+                        selector: 'node[isCurrentUser != true]',
+                        style: {
+                            'background-color': ele => ele.data('role') === 'user' ? '#8b5cf6' : '#f1f5f9',
+                            'label': 'data(label)',
+                            'color': ele => ele.data('role') === 'user' ? '#fff' : '#64748b',
+                            'text-valign': 'center', 
+                            'text-halign': 'center',
+                            'width': 'label', 
+                            'height': 36, 
+                            'padding': '12px',
+                            'shape': 'round-rectangle',
+                            'border-width': 2, 
+                            'border-color': '#8b5cf6',
+                            'border-style': 'dashed',
+                            'font-size': '11px'
+                        }
+                    },
+                    {
+                        selector: 'edge[userId = "' + userId + '"]',
+                        style: { 
+                            'width': 2, 
+                            'line-color': '#10b981', 
+                            'target-arrow-color': '#10b981', 
+                            'target-arrow-shape': 'triangle', 
+                            'curve-style': 'bezier' 
+                        }
+                    },
+                    {
+                        selector: 'edge[userId != "' + userId + '"]',
+                        style: { 
+                            'width': 1, 
+                            'line-color': '#cbd5e1', 
+                            'line-style': 'dashed',
+                            'target-arrow-color': '#cbd5e1', 
+                            'target-arrow-shape': 'triangle', 
+                            'curve-style': 'bezier' 
+                        }
                     },
                     {
                         selector: `#${activeNodeId}`,
-                        style: { 'border-color': '#10b981', 'border-width': 3, 'background-color': '#d1fae5', 'color': '#065f46' }
+                        style: { 
+                            'border-color': '#ef4444', 
+                            'border-width': 3, 
+                            'background-color': '#fef2f2', 
+                            'color': '#991b1b' 
+                        }
                     }
                 ],
-                layout: { name: 'breadthfirst', directed: true, padding: 50, spacingFactor: 1.2 }
+                layout: { 
+                    name: 'breadthfirst', 
+                    directed: true, 
+                    padding: 50, 
+                    spacingFactor: 1.2 
+                }
             });
 
+            // 节点点击事件
             cy.on('tap', 'node', function(evt){
-                activeNodeId = evt.target.id();
-                renderStreamView(); 
-                toggleView(); 
-                setTimeout(() => {
-                    const allBubbles = document.getElementById('chat-container').querySelectorAll('.group');
-                    if (allBubbles.length > 0) allBubbles[allBubbles.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 100);
+                const nodeId = evt.target.id();
+                const nodeUserId = evt.target.data('userId');
+                const isCurrentUserNode = evt.target.data('isCurrentUser');
                 
-                // 广播活动节点变更
-                if (collaborationRoom) {
-                    broadcastNodeOperation({
-                        type: 'set_active_node',
-                        nodeId: activeNodeId
-                    });
+                // 只能点击当前用户的节点
+                if (isCurrentUserNode) {
+                    activeNodeId = nodeId;
+                    renderStreamView(); 
+                    toggleView(); 
+                    setTimeout(() => {
+                        const allBubbles = document.getElementById('chat-container').querySelectorAll('.group');
+                        if (allBubbles.length > 0) allBubbles[allBubbles.length - 1].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 100);
+                } else {
+                    showNotification('只能操作自己的思维树分支', 'info');
                 }
             });
 
@@ -1557,14 +1525,6 @@
             const val = document.getElementById('system-prompt-input').value.trim();
             if (val) {
                 currentSystemPrompt = val;
-                
-                // 广播系统提示词更新
-                if (collaborationRoom) {
-                    broadcastNodeOperation({
-                        type: 'update_system_prompt',
-                        prompt: val
-                    });
-                }
             }
             toggleSystemPromptConfig();
         }
@@ -1593,6 +1553,11 @@
             localStorage.setItem('esa_mindforest_history', JSON.stringify(chatHistory));
             loadSidebar();
             document.getElementById('current-chat-title').innerText = title;
+            
+            // 如果是协作房间，自动保存分支
+            if (collaborationRoom) {
+                saveCurrentBranch();
+            }
         }
         
         async function handleFileUpload(input) {
@@ -1673,6 +1638,23 @@
             chatHistory = chatHistory.filter(c => c.id !== chatId);
             localStorage.setItem('esa_mindforest_history', JSON.stringify(chatHistory));
             if (currentChatId === chatId) createNewChat(); else loadSidebar();
+        }
+        
+        // ================= 获取当前快照 =================
+        function getCurrentSnapshot() {
+            const snapshot = {
+                nodeMap: JSON.parse(JSON.stringify(nodeMap)), // 深拷贝节点映射
+                rootId: rootId,
+                activeNodeId: activeNodeId,
+                systemPrompt: currentSystemPrompt,
+                region: currentRegion,
+                timestamp: Date.now(),
+                version: 1
+            };
+            
+            console.log('创建快照，节点数:', Object.keys(snapshot.nodeMap).length);
+            
+            return snapshot;
         }
     </script>
 </body>
