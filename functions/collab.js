@@ -1,4 +1,4 @@
-// functions/collab.js - 适配阿里云ESA EdgeKV API
+// functions/collab.js - 阿里云ESA EdgeKV协作后端（分叉协作版）
 export default {
   async fetch(request, env, ctx) {
     // 设置CORS头
@@ -50,12 +50,14 @@ export default {
           return await handleJoinRoom(requestBody);
         case 'leave_room':
           return await handleLeaveRoom(requestBody);
-        case 'send_operation':
-          return await handleSendOperation(requestBody);
+        case 'update_user_branch':
+          return await handleUpdateUserBranch(requestBody);
         case 'get_updates':
           return await handleGetUpdates(url);
         case 'get_room_info':
           return await handleGetRoomInfo(url);
+        case 'test_kv':
+          return await handleTestKV();
         default:
           return new Response(JSON.stringify({ error: '未知操作' }), {
             status: 400,
@@ -79,7 +81,7 @@ export default {
 
 // 获取EdgeKV实例
 function getEdgeKV(namespace) {
-  // 根据官方文档，使用 new EdgeKV() 创建实例
+  // 使用阿里云ESA EdgeKV API
   return new EdgeKV({ namespace: namespace || "mindforest-collab" });
 }
 
@@ -120,6 +122,42 @@ async function edgeKVDelete(namespace, key) {
 
 // ==================== 协作API处理函数 ====================
 
+// 测试KV存储
+async function handleTestKV() {
+  try {
+    const testKey = 'test:' + Date.now();
+    const testValue = { timestamp: Date.now(), message: 'KV存储测试' };
+    
+    // 写入测试数据
+    await edgeKVPut("mindforest-collab", testKey, JSON.stringify(testValue));
+    
+    // 读取测试数据
+    const readValue = await edgeKVGet("mindforest-collab", testKey, "text");
+    
+    // 删除测试数据
+    await edgeKVDelete("mindforest-collab", testKey);
+    
+    return new Response(JSON.stringify({
+      success: true,
+      message: 'KV存储测试成功',
+      writeKey: testKey,
+      writeValue: testValue,
+      readValue: readValue ? JSON.parse(readValue) : null
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  } catch (error) {
+    return new Response(JSON.stringify({
+      success: false,
+      error: error.message
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
+  }
+}
+
 // 创建房间
 async function handleCreateRoom(requestBody) {
   if (!requestBody) {
@@ -132,7 +170,7 @@ async function handleCreateRoom(requestBody) {
   const { roomId, roomData, snapshot, userId, userName } = requestBody;
   
   // 验证必要参数
-  if (!roomId || !roomData || !userId) {
+  if (!roomId || !roomData || !userId || !snapshot) {
     return new Response(JSON.stringify({ error: '缺少必要参数' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -141,15 +179,24 @@ async function handleCreateRoom(requestBody) {
   
   // 存储房间数据到KV
   const roomKey = `room:${roomId}`;
+  
+  // 初始化房间数据
   const room = {
     ...roomData,
-    snapshot: snapshot || {},
+    snapshot, // 主持人初始思维树
+    userBranches: {
+      [userId]: {
+        snapshot: snapshot, // 主持人的分支（初始状态）
+        lastUpdated: Date.now(),
+        userName: userName
+      }
+    },
     operations: [],
     lastUpdated: Date.now()
   };
   
   try {
-    // 使用EdgeKV存储 - 根据官方文档
+    // 使用EdgeKV存储
     await edgeKVPut("mindforest-collab", roomKey, JSON.stringify(room));
     
     return new Response(JSON.stringify({
@@ -212,7 +259,21 @@ async function handleJoinRoom(requestBody) {
     });
   }
   
-  // 添加用户到房间
+  // 获取主持人的思维树快照
+  const hostSnapshot = room.snapshot;
+  
+  // 为协作者创建分支（复制主持人的思维树）
+  if (!room.userBranches) {
+    room.userBranches = {};
+  }
+  
+  room.userBranches[userId] = {
+    snapshot: hostSnapshot, // 复制主持人的思维树
+    lastUpdated: Date.now(),
+    userName: userName || `用户${userId.substring(0, 4)}`
+  };
+  
+  // 添加用户到活跃用户列表
   const existingUserIndex = room.activeUsers?.findIndex(u => u.id === userId);
   if (existingUserIndex === -1 || !room.activeUsers) {
     if (!room.activeUsers) room.activeUsers = [];
@@ -243,8 +304,9 @@ async function handleJoinRoom(requestBody) {
         createdByName: room.createdByName,
         activeUsers: room.activeUsers
       },
-      snapshot: room.snapshot || {},
-      message: '加入房间成功'
+      snapshot: hostSnapshot, // 返回主持人的初始思维树
+      userBranch: room.userBranches[userId], // 返回协作者的分支
+      message: '加入房间成功，已复制主持人的思维树'
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -297,11 +359,15 @@ async function handleLeaveRoom(requestBody) {
     });
   }
   
-  // 移除用户
+  // 从活跃用户列表中移除
   room.activeUsers = room.activeUsers?.filter(u => u.id !== userId) || [];
+  
+  // 保留用户分支数据（可选，可以删除）
+  // 如果需要删除：delete room.userBranches[userId];
+  
   room.lastUpdated = Date.now();
   
-  // 如果房间为空，清理房间（可选）
+  // 如果房间为空，清理房间
   if (room.activeUsers.length === 0) {
     try {
       await edgeKVDelete("mindforest-collab", roomKey);
@@ -323,8 +389,8 @@ async function handleLeaveRoom(requestBody) {
   });
 }
 
-// 发送操作
-async function handleSendOperation(requestBody) {
+// 更新用户分支（用户在自己的思维树上操作后更新）
+async function handleUpdateUserBranch(requestBody) {
   if (!requestBody) {
     return new Response(JSON.stringify({ error: '请求体为空' }), {
       status: 400,
@@ -332,9 +398,9 @@ async function handleSendOperation(requestBody) {
     });
   }
   
-  const { roomId, userId, operation } = requestBody;
+  const { roomId, userId, snapshot, operation } = requestBody;
   
-  if (!roomId || !userId || !operation) {
+  if (!roomId || !userId || !snapshot) {
     return new Response(JSON.stringify({ error: '缺少必要参数' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -362,23 +428,34 @@ async function handleSendOperation(requestBody) {
     });
   }
   
-  // 添加操作到历史
-  if (!room.operations) {
-    room.operations = [];
+  // 更新用户分支
+  if (!room.userBranches) {
+    room.userBranches = {};
   }
   
-  // 添加操作，包含完整信息
-  room.operations.push({
-    ...operation,
-    timestamp: Date.now(),
-    userId,
-    userName: requestBody.userName || '用户', // 确保有用户名
-    id: `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-  });
+  room.userBranches[userId] = {
+    snapshot: snapshot,
+    lastUpdated: Date.now(),
+    userName: room.userBranches[userId]?.userName || `用户${userId.substring(0, 4)}`
+  };
   
-  // 限制操作历史大小
-  if (room.operations.length > 100) {
-    room.operations = room.operations.slice(-50);
+  // 添加操作到历史（用于显示操作记录）
+  if (operation) {
+    if (!room.operations) {
+      room.operations = [];
+    }
+    
+    room.operations.push({
+      ...operation,
+      timestamp: Date.now(),
+      userId,
+      id: `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    });
+    
+    // 限制操作历史大小
+    if (room.operations.length > 100) {
+      room.operations = room.operations.slice(-50);
+    }
   }
   
   room.lastUpdated = Date.now();
@@ -387,13 +464,16 @@ async function handleSendOperation(requestBody) {
     // 更新存储
     await edgeKVPut("mindforest-collab", roomKey, JSON.stringify(room));
     
-    return new Response(JSON.stringify({ success: true }), {
+    return new Response(JSON.stringify({ 
+      success: true,
+      message: '分支更新成功'
+    }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   } catch (error) {
     return new Response(JSON.stringify({ 
-      error: '更新房间数据失败: ' + error.message 
+      error: '更新分支失败: ' + error.message 
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -401,7 +481,7 @@ async function handleSendOperation(requestBody) {
   }
 }
 
-// 获取更新
+// 获取更新（用于获取其他用户的分支状态）
 async function handleGetUpdates(url) {
   const roomId = url.searchParams.get('roomId');
   const userId = url.searchParams.get('userId');
@@ -410,7 +490,7 @@ async function handleGetUpdates(url) {
   if (!roomId || !userId) {
     return new Response(JSON.stringify({ 
       error: '缺少必要参数',
-      updates: [],
+      userBranches: {},
       users: [],
       lastSync: Date.now()
     }), {
@@ -427,7 +507,7 @@ async function handleGetUpdates(url) {
     if (!roomData) {
       return new Response(JSON.stringify({ 
         error: '房间不存在',
-        updates: [],
+        userBranches: {},
         users: [],
         lastSync: Date.now()
       }), {
@@ -439,7 +519,7 @@ async function handleGetUpdates(url) {
   } catch (error) {
     return new Response(JSON.stringify({ 
       error: '读取房间数据失败: ' + error.message,
-      updates: [],
+      userBranches: {},
       users: [],
       lastSync: Date.now()
     }), {
@@ -448,14 +528,30 @@ async function handleGetUpdates(url) {
     });
   }
   
-  // 获取上次同步后的新操作
+  // 获取上次同步后的操作（用于通知）
   const updates = (room.operations || []).filter(op => 
     op.timestamp > lastSync && op.userId !== userId
   );
   
+  // 获取其他用户的分支状态
+  const userBranches = {};
+  if (room.userBranches) {
+    Object.keys(room.userBranches).forEach(otherUserId => {
+      if (otherUserId !== userId) {
+        userBranches[otherUserId] = {
+          userName: room.userBranches[otherUserId].userName,
+          lastUpdated: room.userBranches[otherUserId].lastUpdated,
+          nodeCount: room.userBranches[otherUserId].snapshot ? 
+            Object.keys(room.userBranches[otherUserId].snapshot.nodeMap || {}).length : 0
+        };
+      }
+    });
+  }
+  
   return new Response(JSON.stringify({
     success: true,
     updates,
+    userBranches, // 其他用户的分支状态
     users: room.activeUsers || [],
     lastSync: Date.now()
   }), {
@@ -496,6 +592,19 @@ async function handleGetRoomInfo(url) {
     });
   }
   
+  // 准备返回的用户分支信息（只包含基本信息，不包含完整的思维树）
+  const userBranchesInfo = {};
+  if (room.userBranches) {
+    Object.keys(room.userBranches).forEach(userId => {
+      userBranchesInfo[userId] = {
+        userName: room.userBranches[userId].userName,
+        lastUpdated: room.userBranches[userId].lastUpdated,
+        nodeCount: room.userBranches[userId].snapshot ? 
+          Object.keys(room.userBranches[userId].snapshot.nodeMap || {}).length : 0
+      };
+    });
+  }
+  
   return new Response(JSON.stringify({
     success: true,
     room: {
@@ -506,6 +615,7 @@ async function handleGetRoomInfo(url) {
       createdByName: room.createdByName,
       activeUsers: room.activeUsers || []
     },
+    userBranches: userBranchesInfo,
     snapshot: room.snapshot || {}
   }), {
     status: 200,
