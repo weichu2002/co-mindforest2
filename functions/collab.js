@@ -45,19 +45,17 @@ export default {
     try {
       switch (action) {
         case 'create_room':
-          return await handleCreateRoom(requestBody, env);
+          return await handleCreateRoom(requestBody);
         case 'join_room':
-          return await handleJoinRoom(requestBody, env);
+          return await handleJoinRoom(requestBody);
         case 'leave_room':
-          return await handleLeaveRoom(requestBody, env);
+          return await handleLeaveRoom(requestBody);
         case 'send_operation':
-          return await handleSendOperation(requestBody, env);
+          return await handleSendOperation(requestBody);
         case 'get_updates':
-          return await handleGetUpdates(url, env);
+          return await handleGetUpdates(url);
         case 'get_room_info':
-          return await handleGetRoomInfo(url, env);
-        case 'test_kv':
-          return await handleTestKV(requestBody, env);
+          return await handleGetRoomInfo(url);
         default:
           return new Response(JSON.stringify({ error: '未知操作' }), {
             status: 400,
@@ -122,47 +120,8 @@ async function edgeKVDelete(namespace, key) {
 
 // ==================== 协作API处理函数 ====================
 
-// 测试KV存储
-async function handleTestKV(requestBody, env) {
-  try {
-    const testKey = 'test:' + Date.now();
-    const testValue = { timestamp: Date.now(), message: 'KV存储测试' };
-    
-    // 写入测试数据
-    await edgeKVPut("mindforest-collab", testKey, JSON.stringify(testValue));
-    
-    // 读取测试数据
-    const readValue = await edgeKVGet("mindforest-collab", testKey, "text");
-    
-    // 删除测试数据
-    await edgeKVDelete("mindforest-collab", testKey);
-    
-    return new Response(JSON.stringify({
-      success: true,
-      message: 'KV存储测试成功',
-      writeKey: testKey,
-      writeValue: testValue,
-      readValue: readValue ? JSON.parse(readValue) : null,
-      edgeKVAvailable: typeof EdgeKV !== 'undefined'
-    }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-  } catch (error) {
-    return new Response(JSON.stringify({
-      success: false,
-      error: error.message,
-      stack: error.stack,
-      edgeKVAvailable: typeof EdgeKV !== 'undefined'
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-  }
-}
-
 // 创建房间
-async function handleCreateRoom(requestBody, env) {
+async function handleCreateRoom(requestBody) {
   if (!requestBody) {
     return new Response(JSON.stringify({ error: '请求体为空' }), {
       status: 400,
@@ -196,8 +155,7 @@ async function handleCreateRoom(requestBody, env) {
     return new Response(JSON.stringify({
       success: true,
       roomId,
-      message: '房间创建成功',
-      edgeKV: true
+      message: '房间创建成功'
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -205,9 +163,7 @@ async function handleCreateRoom(requestBody, env) {
   } catch (error) {
     console.error('创建房间EdgeKV存储错误:', error);
     return new Response(JSON.stringify({
-      error: '创建房间失败: ' + error.message,
-      details: '请检查EdgeKV配置',
-      edgeKVAvailable: typeof EdgeKV !== 'undefined'
+      error: '创建房间失败: ' + error.message
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -216,7 +172,7 @@ async function handleCreateRoom(requestBody, env) {
 }
 
 // 加入房间
-async function handleJoinRoom(requestBody, env) {
+async function handleJoinRoom(requestBody) {
   if (!requestBody) {
     return new Response(JSON.stringify({ error: '请求体为空' }), {
       status: 400,
@@ -288,8 +244,7 @@ async function handleJoinRoom(requestBody, env) {
         activeUsers: room.activeUsers
       },
       snapshot: room.snapshot || {},
-      message: '加入房间成功',
-      edgeKV: true
+      message: '加入房间成功'
     }), {
       status: 200,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -297,8 +252,7 @@ async function handleJoinRoom(requestBody, env) {
   } catch (error) {
     console.error('更新房间数据错误:', error);
     return new Response(JSON.stringify({ 
-      error: '更新房间数据失败: ' + error.message,
-      edgeKV: true
+      error: '更新房间数据失败: ' + error.message
     }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
@@ -307,7 +261,7 @@ async function handleJoinRoom(requestBody, env) {
 }
 
 // 离开房间
-async function handleLeaveRoom(requestBody, env) {
+async function handleLeaveRoom(requestBody) {
   if (!requestBody) {
     return new Response(JSON.stringify({ success: true }), {
       status: 200,
@@ -370,7 +324,7 @@ async function handleLeaveRoom(requestBody, env) {
 }
 
 // 发送操作
-async function handleSendOperation(requestBody, env) {
+async function handleSendOperation(requestBody) {
   if (!requestBody) {
     return new Response(JSON.stringify({ error: '请求体为空' }), {
       status: 400,
@@ -413,10 +367,12 @@ async function handleSendOperation(requestBody, env) {
     room.operations = [];
   }
   
+  // 添加操作，包含完整信息
   room.operations.push({
     ...operation,
     timestamp: Date.now(),
     userId,
+    userName: requestBody.userName || '用户', // 确保有用户名
     id: `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
   });
   
@@ -446,7 +402,7 @@ async function handleSendOperation(requestBody, env) {
 }
 
 // 获取更新
-async function handleGetUpdates(url, env) {
+async function handleGetUpdates(url) {
   const roomId = url.searchParams.get('roomId');
   const userId = url.searchParams.get('userId');
   const lastSync = parseInt(url.searchParams.get('lastSync') || '0');
@@ -509,7 +465,7 @@ async function handleGetUpdates(url, env) {
 }
 
 // 获取房间信息
-async function handleGetRoomInfo(url, env) {
+async function handleGetRoomInfo(url) {
   const roomId = url.searchParams.get('roomId');
   
   if (!roomId) {
