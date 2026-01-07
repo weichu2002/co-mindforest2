@@ -1,0 +1,19 @@
+{
+  "functions": {
+    "collab": {
+      "handler": "./functions/collab.js",
+      "methods": ["POST", "GET", "OPTIONS"]
+    }
+  },
+  "routes": [
+    {
+      "pattern": "/",
+      "file": "./index.html"
+    },
+    {
+      "pattern": "/api/collab",
+      "function": "collab"
+    }
+  ],
+  "environment": {}
+}
